@@ -1,0 +1,25 @@
+{
+  "name": "permissions-maintenance",
+  "version": "0.0.1",
+  "description": "Maintain the permissions database",
+  "main": "permissions-maintenance.js",
+  "dependencies": {
+    "http-helper-functions": "^0.0.1",
+    "pg": "^6.0.3",
+    "pg-event-producer": "^0.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mpnally/permissions-maintenance.git"
+  },
+  "author": "Martin Nally",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/mpnally/permissions-maintenance/issues"
+  },
+  "homepage": "https://github.com/mpnally/permissions-maintenance#readme"
+}

@@ -1,7 +1,7 @@
 'use strict';
 var Pool = require('pg').Pool;
 var lib = require('http-helper-functions');
-var pge = require('./pg-event-producer.js');
+var pge = require('pg-event-producer');
 
 var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
