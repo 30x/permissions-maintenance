@@ -136,14 +136,42 @@ function deletePermissions(req, res, subject) {
 
 function updatePermissions(req, res, patch) {
   var subject = url.parse(req.url).search.substring(1);
+  console.log('updatePermissions')
   ifAllowedDo(req, res, subject, 'update', true, function(permissions, etag) {
-    if (req.headers['if-match'] == etag) { 
+    function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
       db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(patchedPermissions, etag, event) {
         addCalculatedProperties(req, patchedPermissions); 
         lib.found(req, res, permissions, etag);
-      });
+      });    
+    }
+    if (req.headers['if-match'] == etag) { 
+      if ('governs' in patch && 'inheritsPermissionsOf' in patch.governs) {
+        function ifSharingSetsAllowDo(sharingSets, action, callback) {
+          if (sharingSets.length > 0) {
+            lib.withAllowedDo(req, res, sharingSets, action, function(result) {
+              if (result) {
+                callback();
+              } else {
+                lib.forbidden(req, res);
+              }
+            });
+          } else {
+            callback();
+          }
+        }
+        var oldSharingSets = permissions.governs.inheritsPermissionsOf !== undefined ? permissions.governs.inheritsPermissionsOf : [];
+        var newSharingSets = patch.governs.inheritsPermissionsOf;
+        var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
+        var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
+        console.log('removedSharingSets', removedSharingSets, 'addedSharingSets', addedSharingSets);
+        ifSharingSetsAllowDo(removedSharingSets, 'delete', function() {
+          ifSharingSetsAllowDo(addedSharingSets, 'create', primUpdatePermissions);
+        });
+      } else {
+        primUpdatePermissions();
+      }
     } else {
       var err;
       if (req.headers['if-match'] === undefined) {
