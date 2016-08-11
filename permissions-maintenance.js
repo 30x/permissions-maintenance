@@ -27,23 +27,19 @@ function verifyPermissions(req, permissions, user) {
   if (permissions.isA != 'Permissions') {
     return 'invalid JSON: "isA" property not set to "Permissions"';
   }
-  if (permissions.inheritsPermissionsOf !== undefined) {
-    return 'inheritsPermissionsOf for a Permissions resource independent of inheritsPermissionsOf for the resource it governs not supported'
-  }
   if (permissions.governs === undefined) {
     return 'invalid JSON: "governs" property not set';
+  }
+  if (permissions.inheritsPermissionsOf !== undefined && !Array.isArray(permissions.inheritsPermissionsOf)) {
+    return 'inheritsPermissionsOf must be an Array'
   }
   var governed = permissions.governs;
   if (governed._self === undefined) {
     return 'must provide _self for governed resource'
   }
-  if (governed.inheritsPermissionsOf !== undefined && !Array.isArray(governed.inheritsPermissionsOf)) {
-    return 'inheritsPermissionsOf must be an Array'
-  }
-  if (permissions.updaters === undefined && governed.inheritsPermissionsOf === undefined) {
-    permissions.updaters = [user];
-    permissions.readers = [user];
-    permissions.writers = [user];
+  if (permissions.updaters === undefined && permissions.inheritsPermissionsOf === undefined) {
+    permissions.updaters = permissions.updaters || [user];
+    permissions.readers = permissions.readers || [user];
   }
   return null;
 }
@@ -80,7 +76,7 @@ function createPermissions(req, res, permissions) {
           lib.created(req, res, permissions, permissions._self, etag);
         });        
       }
-      var sharingSets = permissions.governs.inheritsPermissionsOf;
+      var sharingSets = permissions.inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
         var subject = lib.internalizeURL(permissions.governs._self);
@@ -145,7 +141,7 @@ function updatePermissions(req, res, patch) {
       });    
     }
     if (req.headers['if-match'] == etag) { 
-      if ('governs' in patch && 'inheritsPermissionsOf' in patch.governs) {
+      if ('inheritsPermissionsOf' in patch) {
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
           if (sharingSets.length > 0) {
             lib.withAllowedDo(req, res, sharingSets, action, function(result) {
@@ -159,8 +155,8 @@ function updatePermissions(req, res, patch) {
             callback();
           }
         }
-        var oldSharingSets = permissions.governs.inheritsPermissionsOf !== undefined ? permissions.governs.inheritsPermissionsOf : [];
-        var newSharingSets = patch.governs.inheritsPermissionsOf;
+        var oldSharingSets = permissions.inheritsPermissionsOf !== undefined ? permissions.inheritsPermissionsOf : [];
+        var newSharingSets = patch.inheritsPermissionsOf;
         var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
         var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
         ifSharingSetsAllowDo(removedSharingSets, 'delete', function() {
@@ -205,10 +201,10 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
       result[sharedWith[i]] = true;
     }
   }
-  var sharingSets = permissions.governs.inheritsPermissionsOf;
+  var sharingSets = permissions.inheritsPermissionsOf;
   if (sharingSets !== undefined) {
     var count = 0;
-    for (var j = 0; j < sharingSets.length; j++) {
+    for (let j = 0; j < sharingSets.length; j++) {
       ifAllowedDo(req, res, sharingSets[j], 'read', true, function(permissions, etag) {
         addUsersWhoCanSee(req, res, permissions, result, function() {if (++count == sharingSets.length) {callback();}});
       });
