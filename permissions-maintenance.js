@@ -39,12 +39,12 @@ function verifyPermissions(req, permissions, user) {
   }
   if (permissions.updaters === undefined && permissions.inheritsPermissionsOf === undefined) {
     permissions.updaters = permissions.updaters || [user];
-    permissions.readers = permissions.readers || [user];
+    permissions.grantsReadAccessTo = permissions.grantsReadAccessTo || [user];
   }
   return null;
 }
 
-var OPERATIONPROPERTIES = ['creators', 'readers', 'updaters', 'deleters'];
+var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAcessTo'];
 var OPERATIONS = ['create', 'read', 'update', 'delete'];
 
 function calculateSharedWith(req, permissions) {
