@@ -73,9 +73,6 @@ function createPermissions(req, res, permissions) {
   } else {
     var err = verifyPermissions(req, permissions, user);
     if (err === null) {
-      err = lib.setStandardCreationProperties(permissions, req, user);
-    }
-    if (err === null) {
       function primCreate(req, res, permissions) {
         calculateSharedWith(req, permissions);
         db.createPermissionsThen(req, res, permissions, function(etag) {
@@ -136,14 +133,15 @@ function deletePermissions(req, res, subject) {
 
 function updatePermissions(req, res, patch) {
   var subject = url.parse(req.url).search.substring(1);
-  console.log('updatePermissions')
   ifAllowedDo(req, res, subject, 'update', true, function(permissions, etag) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
-      db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(patchedPermissions, etag, event) {
+      patchedPermissions.modifier = lib.getUser(req);
+      patchedPermissions.modified = new Date().toISOString();
+      db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
         addCalculatedProperties(req, patchedPermissions); 
-        lib.found(req, res, permissions, etag);
+        lib.found(req, res, patchedPermissions, etag);
       });    
     }
     if (req.headers['if-match'] == etag) { 
@@ -165,7 +163,6 @@ function updatePermissions(req, res, patch) {
         var newSharingSets = patch.governs.inheritsPermissionsOf;
         var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
         var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
-        console.log('removedSharingSets', removedSharingSets, 'addedSharingSets', addedSharingSets);
         ifSharingSetsAllowDo(removedSharingSets, 'delete', function() {
           ifSharingSetsAllowDo(addedSharingSets, 'create', primUpdatePermissions);
         });

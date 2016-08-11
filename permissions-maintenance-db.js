@@ -53,7 +53,7 @@ function createPermissionsThen(req, res, permissions, callback) {
     return {subject: permissions.governs._self, action: 'create', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
-    callback(permissions, pgResult.rows[0].etag);
+    callback(pgResult.rows[0].etag);
   });
 }
 
@@ -65,7 +65,7 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
     return {subject: patchedPermissions.governs._self, action: 'update', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
-    callback(patchedPermissions, pgResult.rows[0].etag);
+    callback(pgResult.rows[0].etag);
   });
 }
 
