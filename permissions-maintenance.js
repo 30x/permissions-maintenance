@@ -85,7 +85,7 @@ function createPermissions(req, res, permissions) {
           for (var i=0; i < sharingSets.length; i++) {
             var sharingSet = sharingSets[i];
             var allowedByAll = true;
-            lib.withAllowedDo(req, res, sharingSet, 'permissionsHeirs', 'add', function(allowed) {
+            lib.withAllowedDo(req, res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
               allowedByAll = allowedByAll && allowed;
               if (++count == sharingSets.length) {
                 if (allowedByAll) {
@@ -135,7 +135,7 @@ function updatePermissions(req, res, patch) {
       if ('inheritsPermissionsOf' in patch) {
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
           if (sharingSets.length > 0) {
-            lib.withAllowedDo(req, res, sharingSets, 'permissionsHeirs', action, function(result) {
+            lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
               if (result) {
                 callback();
               } else {
