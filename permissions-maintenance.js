@@ -17,29 +17,33 @@ var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
 
 function verifyPermissions(req, permissions, user) {
-  var rslt = lib.setStandardCreationProperties(req, permissions, user);
+  var permissionsPermissions = permissions._permissions;
+  if (permissionsPermissions === undefined) {
+    permissionsPermissions = permissions._permissions = {};
+  }
+  var rslt = lib.setStandardCreationProperties(req, permissionsPermissions, user);
   if (rslt !== null) {
     return result;
   }
-  if (permissions.isA == undefined && permissions._governs !== undefined) {
-    permissions.isA = 'Permissions';
+  if (permissionsPermissions.isA == undefined && permissions._governs !== undefined) {
+    permissionsPermissions.isA = 'Permissions';
   }
-  if (permissions.isA != 'Permissions') {
+  if (permissionsPermissions.isA != 'Permissions') {
     return 'invalid JSON: "isA" property not set to "Permissions"';
   }
   if (permissions._governs === undefined) {
     return 'invalid JSON: "_governs" property not set';
   }
-  if (permissions.inheritsPermissionsOf !== undefined && !Array.isArray(permissions.inheritsPermissionsOf)) {
+  if (permissionsPermissions.inheritsPermissionsOf !== undefined && !Array.isArray(permissionsPermissions.inheritsPermissionsOf)) {
     return 'inheritsPermissionsOf must be an Array'
   }
   var governed = permissions._governs;
   if (governed._self === undefined) {
     return 'must provide _self for governed resource'
   }
-  if (permissions.grantsUpdateAcessTo === undefined && permissions.inheritsPermissionsOf === undefined) {
-    permissions.grantsUpdateAcessTo = permissions.grantsUpdateAcessTo || [user];
-    permissions.grantsReadAccessTo = permissions.grantsReadAccessTo || [user];
+  if (permissionsPermissions.grantsUpdateAcessTo === undefined && permissionsPermissions.inheritsPermissionsOf === undefined) {
+    permissionsPermissions.grantsUpdateAcessTo = [user];
+    permissionsPermissions.grantsReadAccessTo = permissionsPermissions.grantsReadAccessTo || [user];
   }
   return null;
 }
@@ -76,7 +80,7 @@ function createPermissions(req, res, permissions) {
           lib.created(req, res, permissions, permissions._self, etag);
         });        
       }
-      var sharingSets = permissions.inheritsPermissionsOf;
+      var sharingSets = permissions._permissions.inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
         var subject = lib.internalizeURL(permissions._governs._self);
@@ -113,14 +117,14 @@ function addCalculatedProperties(req, permissions) {
 }
 
 function getPermissions(req, res, subject) {
-  ifAllowedDo(req, res, subject, 'permissions', 'read', function(permissions, etag) {
+  ifAllowedDo(req, res, subject, '_permissions', 'read', function(permissions, etag) {
     lib.found(req, res, permissions, etag);
   });
 }
 
 function updatePermissions(req, res, patch) {
   var subject = url.parse(req.url).search.substring(1);
-  ifAllowedDo(req, res, subject, 'permissions', 'update', function(permissions, etag) {
+  ifAllowedDo(req, res, subject, '_permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
@@ -132,7 +136,7 @@ function updatePermissions(req, res, patch) {
       });    
     }
     if (req.headers['if-match'] == etag) { 
-      if ('inheritsPermissionsOf' in patch) {
+      if ('_permissions' in patch && 'inheritsPermissonsOf' in patch._permissions) {
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
           if (sharingSets.length > 0) {
             lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
@@ -146,8 +150,8 @@ function updatePermissions(req, res, patch) {
             callback();
           }
         }
-        var oldSharingSets = permissions.inheritsPermissionsOf !== undefined ? permissions.inheritsPermissionsOf : [];
-        var newSharingSets = patch.inheritsPermissionsOf;
+        var oldSharingSets = permissions._permissions.inheritsPermissionsOf == null ? [] : permissions._permissions.inheritsPermissionsOf;
+        var newSharingSets = patch._permissions.inheritsPermissionsOf;
         var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
         var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
         ifSharingSetsAllowDo(removedSharingSets, 'remove', function() {
@@ -171,7 +175,7 @@ function updatePermissions(req, res, patch) {
 function ifAllowedDo(req, res, subject, property, action, callback) {
   lib.withAllowedDo(req, res, subject, property, action, function(answer) {
     if (answer) {
-      if (property == 'permissions') {
+      if (property == '_permissions') {
         db.withPermissionsDo(req, res, subject, function(permissions, etag) {
           callback(permissions, etag);
         });
@@ -191,11 +195,11 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
       result[sharedWith[i]] = true;
     }
   }
-  var sharingSets = permissions.inheritsPermissionsOf;
+  var sharingSets = permissions._permissions.inheritsPermissionsOf;
   if (sharingSets !== undefined) {
     var count = 0;
     for (let j = 0; j < sharingSets.length; j++) {
-      ifAllowedDo(req, res, sharingSets[j], 'permissions', 'read', function(permissions, etag) {
+      ifAllowedDo(req, res, sharingSets[j], '_permissions', 'read', function(permissions, etag) {
         addUsersWhoCanSee(req, res, permissions, result, function() {if (++count == sharingSets.length) {callback();}});
       });
     }
@@ -207,7 +211,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
 function getUsersWhoCanSee(req, res, resource) {
   var result = {};
   resource = lib.internalizeURL(resource, req.headers.host);
-  ifAllowedDo(req, res, resource, 'permissions', 'read', function (permissions, etag) {
+  ifAllowedDo(req, res, resource, '_permissions', 'read', function (permissions, etag) {
     addUsersWhoCanSee(req, res, permissions, result, function() {
       lib.found(req, res, Object.keys(result));
     });
