@@ -37,15 +37,15 @@ function verifyPermissions(req, permissions, user) {
   if (governed._self === undefined) {
     return 'must provide _self for governed resource'
   }
-  if (permissions.updaters === undefined && permissions.inheritsPermissionsOf === undefined) {
-    permissions.updaters = permissions.updaters || [user];
+  if (permissions.grantsUpdateAcessTo === undefined && permissions.inheritsPermissionsOf === undefined) {
+    permissions.grantsUpdateAcessTo = permissions.grantsUpdateAcessTo || [user];
     permissions.grantsReadAccessTo = permissions.grantsReadAccessTo || [user];
   }
   return null;
 }
 
-var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAcessTo'];
-var OPERATIONS = ['create', 'read', 'update', 'delete'];
+var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAcessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
+var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
 
 function calculateSharedWith(req, permissions) {
   function listUsers (obj, result) {
@@ -85,7 +85,7 @@ function createPermissions(req, res, permissions) {
           for (var i=0; i < sharingSets.length; i++) {
             var sharingSet = sharingSets[i];
             var allowedByAll = true;
-            lib.withAllowedDo(req, res, `/permissions?${sharingSet}`, 'create', function(allowed) {
+            lib.withAllowedDo(req, res, sharingSet, 'permissionsHeirs', 'add', function(allowed) {
               allowedByAll = allowedByAll && allowed;
               if (++count == sharingSets.length) {
                 if (allowedByAll) {
@@ -113,23 +113,14 @@ function addCalculatedProperties(req, permissions) {
 }
 
 function getPermissions(req, res, subject) {
-  ifAllowedDo(req, res, subject, 'read', true, function(permissions, etag) {
+  ifAllowedDo(req, res, subject, 'permissions', 'read', function(permissions, etag) {
     lib.found(req, res, permissions, etag);
-  });
-}
-
-function deletePermissions(req, res, subject) {
-  ifAllowedDo(req, res, subject, 'delete', true, function() {
-    db.deletePermissionsThen(req, res, subject, function(permissionsRow, eventRow) {
-      addCalculatedProperties(req, permissions); 
-      lib.found(req, res, permissionsRow.data, permissionsRow.etag);
-    });
   });
 }
 
 function updatePermissions(req, res, patch) {
   var subject = url.parse(req.url).search.substring(1);
-  ifAllowedDo(req, res, subject, 'update', true, function(permissions, etag) {
+  ifAllowedDo(req, res, subject, 'permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
@@ -144,7 +135,7 @@ function updatePermissions(req, res, patch) {
       if ('inheritsPermissionsOf' in patch) {
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
           if (sharingSets.length > 0) {
-            lib.withAllowedDo(req, res, sharingSets, action, function(result) {
+            lib.withAllowedDo(req, res, sharingSets, 'permissionsHeirs', action, function(result) {
               if (result) {
                 callback();
               } else {
@@ -159,8 +150,8 @@ function updatePermissions(req, res, patch) {
         var newSharingSets = patch.inheritsPermissionsOf;
         var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
         var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
-        ifSharingSetsAllowDo(removedSharingSets, 'delete', function() {
-          ifSharingSetsAllowDo(addedSharingSets, 'create', primUpdatePermissions);
+        ifSharingSetsAllowDo(removedSharingSets, 'remove', function() {
+          ifSharingSetsAllowDo(addedSharingSets, 'add', primUpdatePermissions);
         });
       } else {
         primUpdatePermissions();
@@ -177,11 +168,10 @@ function updatePermissions(req, res, patch) {
   });
 }
 
-function ifAllowedDo(req, res, subject, action, subjectIsPermission, callback) {
-  var realSubject = subjectIsPermission ? `/permissions?${subject}` : subject;
-  lib.withAllowedDo(req, res, realSubject, action, function(answer) {
+function ifAllowedDo(req, res, subject, property, action, callback) {
+  lib.withAllowedDo(req, res, subject, property, action, function(answer) {
     if (answer) {
-      if (subjectIsPermission) {
+      if (property == 'permissions') {
         db.withPermissionsDo(req, res, subject, function(permissions, etag) {
           callback(permissions, etag);
         });
@@ -205,7 +195,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
   if (sharingSets !== undefined) {
     var count = 0;
     for (let j = 0; j < sharingSets.length; j++) {
-      ifAllowedDo(req, res, sharingSets[j], 'read', true, function(permissions, etag) {
+      ifAllowedDo(req, res, sharingSets[j], 'permissions', 'read', function(permissions, etag) {
         addUsersWhoCanSee(req, res, permissions, result, function() {if (++count == sharingSets.length) {callback();}});
       });
     }
@@ -217,7 +207,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
 function getUsersWhoCanSee(req, res, resource) {
   var result = {};
   resource = lib.internalizeURL(resource, req.headers.host);
-  ifAllowedDo(req, res, resource, 'read', true, function (permissions, etag) {
+  ifAllowedDo(req, res, resource, 'permissions', 'read', function (permissions, etag) {
     addUsersWhoCanSee(req, res, permissions, result, function() {
       lib.found(req, res, Object.keys(result));
     });
@@ -239,7 +229,7 @@ function getResourcesSharedWith(req, res, user) {
 }
 
 function getPermissionsHeirs(req, res, securedObject) {
-  ifAllowedDo(req, res, securedObject, 'read', false, function() {
+  ifAllowedDo(req, res, securedObject, null, 'read', function() {
     db.withHeirsDo(req, res, securedObject, function(heirs) {
       lib.found(req, res, heirs);
     });
@@ -258,12 +248,10 @@ function requestHandler(req, res) {
     if (req_url.pathname == '/permissions' && req_url.search !== null) {
       if (req.method == 'GET') { 
         getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
-      } else if (req.method == 'DELETE') { 
-        deletePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
       } else if (req.method == 'PATCH') { 
         lib.getServerPostBody(req, res, updatePermissions);
       } else {
-        lib.methodNotAllowed(req, res, ['GET', 'DELETE', 'PATCH']);
+        lib.methodNotAllowed(req, res, ['GET', 'PATCH']);
       }
     } else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null) {
       if (req.method == 'GET') {
