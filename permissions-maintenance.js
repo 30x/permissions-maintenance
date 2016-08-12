@@ -21,19 +21,19 @@ function verifyPermissions(req, permissions, user) {
   if (rslt !== null) {
     return result;
   }
-  if (permissions.isA == undefined && permissions.governs !== undefined) {
+  if (permissions.isA == undefined && permissions._governs !== undefined) {
     permissions.isA = 'Permissions';
   }
   if (permissions.isA != 'Permissions') {
     return 'invalid JSON: "isA" property not set to "Permissions"';
   }
-  if (permissions.governs === undefined) {
-    return 'invalid JSON: "governs" property not set';
+  if (permissions._governs === undefined) {
+    return 'invalid JSON: "_governs" property not set';
   }
   if (permissions.inheritsPermissionsOf !== undefined && !Array.isArray(permissions.inheritsPermissionsOf)) {
     return 'inheritsPermissionsOf must be an Array'
   }
-  var governed = permissions.governs;
+  var governed = permissions._governs;
   if (governed._self === undefined) {
     return 'must provide _self for governed resource'
   }
@@ -44,7 +44,7 @@ function verifyPermissions(req, permissions, user) {
   return null;
 }
 
-var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAcessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
+var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAccessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
 var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
 
 function calculateSharedWith(req, permissions) {
@@ -58,7 +58,7 @@ function calculateSharedWith(req, permissions) {
   }
   var result = {};
   listUsers(permissions, result);
-  listUsers(permissions.governs, result);
+  listUsers(permissions._governs, result);
   permissions._sharedWith = Object.keys(result);
 }
 
@@ -79,7 +79,7 @@ function createPermissions(req, res, permissions) {
       var sharingSets = permissions.inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
-        var subject = lib.internalizeURL(permissions.governs._self);
+        var subject = lib.internalizeURL(permissions._governs._self);
         if (sharingSets.indexOf(subject) == -1) {
           var count = 0;
           for (var i=0; i < sharingSets.length; i++) {
@@ -109,7 +109,7 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._self = PROTOCOL + '//' + req.headers.host + '/permissions?' + permissions.governs._self;
+  permissions._self = PROTOCOL + '//' + req.headers.host + '/permissions?' + permissions._governs._self;
 }
 
 function getPermissions(req, res, subject) {
@@ -229,7 +229,7 @@ function getResourcesSharedWith(req, res, user) {
 }
 
 function getPermissionsHeirs(req, res, securedObject) {
-  ifAllowedDo(req, res, securedObject, null, 'read', function() {
+  ifAllowedDo(req, res, securedObject, '_governs', 'read', function() {
     db.withHeirsDo(req, res, securedObject, function(heirs) {
       lib.found(req, res, heirs);
     });

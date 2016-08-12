@@ -47,10 +47,10 @@ function deletePermissionsThen(req, res, subject, callback) {
 
 function createPermissionsThen(req, res, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
-  var subject = permissions.governs._self;
+  var subject = permissions._governs._self;
   var query = `INSERT INTO permissions (subject, data) values('${subject}', '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: permissions.governs._self, action: 'create', etag: pgResult.rows[0].etag}
+    return {subject: permissions._governs._self, action: 'create', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
     callback(pgResult.rows[0].etag);
@@ -62,7 +62,7 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
   var key = lib.internalizeURL(subject, req.headers.host);
   var query = `UPDATE permissions SET data = ('${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: patchedPermissions.governs._self, action: 'update', etag: pgResult.rows[0].etag}
+    return {subject: patchedPermissions._governs._self, action: 'update', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
     callback(pgResult.rows[0].etag);
@@ -83,13 +83,13 @@ function withResourcesSharedWithActorsDo(req, res, actors, callback) {
 }
 
 function withHeirsDo(req, res, securedObject, callback) {
-  var query = `SELECT subject, data FROM permissions WHERE data @> '{"governs": {"inheritsPermissionsOf":["${securedObject}"]}}'`
+  var query = `SELECT subject, data FROM permissions WHERE data @> '{"inheritsPermissionsOf":["${securedObject}"]}'`
   pool.query(query, function (err, pgResult) {
     if (err) {
       lib.badRequest(res, err);
     }
     else {
-      callback(pgResult.rows.map((row) => {return row.data.governs;}))
+      callback(pgResult.rows.map((row) => {return row.data._governs;}))
     }
   });
 }
