@@ -128,8 +128,8 @@ function updatePermissions(req, res, patch) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
-      patchedPermissions.modifier = lib.getUser(req);
-      patchedPermissions.modified = new Date().toISOString();
+      patchedPermissions._permissions.modifier = lib.getUser(req);
+      patchedPermissions._permissions.modified = new Date().toISOString();
       db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
         addCalculatedProperties(req, patchedPermissions); 
         lib.found(req, res, patchedPermissions, etag);
