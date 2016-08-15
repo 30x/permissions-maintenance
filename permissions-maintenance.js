@@ -117,14 +117,14 @@ function addCalculatedProperties(req, permissions) {
 }
 
 function getPermissions(req, res, subject) {
-  ifAllowedDo(req, res, subject, '_permissions', 'read', function(permissions, etag) {
+  ifAllowedThen(req, res, subject, '_permissions', 'read', function(permissions, etag) {
     lib.found(req, res, permissions, etag);
   });
 }
 
 function updatePermissions(req, res, patch) {
   var subject = url.parse(req.url).search.substring(1);
-  ifAllowedDo(req, res, subject, '_permissions', 'update', function(permissions, etag) {
+  ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
@@ -172,7 +172,7 @@ function updatePermissions(req, res, patch) {
   });
 }
 
-function ifAllowedDo(req, res, subject, property, action, callback) {
+function ifAllowedThen(req, res, subject, property, action, callback) {
   lib.withAllowedDo(req, res, subject, property, action, function(answer) {
     if (answer) {
       if (property == '_permissions') {
@@ -199,7 +199,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
   if (sharingSets !== undefined) {
     var count = 0;
     for (let j = 0; j < sharingSets.length; j++) {
-      ifAllowedDo(req, res, sharingSets[j], '_permissions', 'read', function(permissions, etag) {
+      ifAllowedThen(req, res, sharingSets[j], '_permissions', 'read', function(permissions, etag) {
         addUsersWhoCanSee(req, res, permissions, result, function() {if (++count == sharingSets.length) {callback();}});
       });
     }
@@ -211,7 +211,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
 function getUsersWhoCanSee(req, res, resource) {
   var result = {};
   resource = lib.internalizeURL(resource, req.headers.host);
-  ifAllowedDo(req, res, resource, '_permissions', 'read', function (permissions, etag) {
+  ifAllowedThen(req, res, resource, '_permissions', 'read', function (permissions, etag) {
     addUsersWhoCanSee(req, res, permissions, result, function() {
       lib.found(req, res, Object.keys(result));
     });
@@ -233,7 +233,7 @@ function getResourcesSharedWith(req, res, user) {
 }
 
 function getPermissionsHeirs(req, res, securedObject) {
-  ifAllowedDo(req, res, securedObject, '_resource', 'read', function() {
+  ifAllowedThen(req, res, securedObject, '_resource', 'read', function() {
     db.withHeirsDo(req, res, securedObject, function(heirs) {
       lib.found(req, res, heirs);
     });
