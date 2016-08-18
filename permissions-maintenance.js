@@ -44,7 +44,9 @@ function verifyPermissions(req, permissions, user) {
   if (permissionsPermissions.grantsUpdateAcessTo === undefined && permissionsPermissions.inheritsPermissionsOf === undefined) {
     permissionsPermissions.grantsUpdateAcessTo = [user];
     permissionsPermissions.grantsReadAccessTo = permissionsPermissions.grantsReadAccessTo || [user];
+    permissionsPermissions.governs = governed._self;
   }
+
   return null;
 }
 

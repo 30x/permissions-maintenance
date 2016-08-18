@@ -7,7 +7,7 @@ var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
 
 var config = {
-  host: process.env.PG_HOST || 'localhost',
+  host: process.env.PG_HOST,
   user: process.env.PG_USER,
   password: process.env.PG_PASSWORD,
   database: process.env.PG_DATABASE
@@ -115,6 +115,10 @@ function init(callback) {
     }
   });    
 }
+
+process.on('unhandledRejection', function(e) {
+  console.log(e.message, e.stack)
+})
 
 exports.withPermissionsDo = withPermissionsDo;
 exports.createPermissionsThen = createPermissionsThen;
