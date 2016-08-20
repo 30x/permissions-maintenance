@@ -15,6 +15,7 @@ var db = require('./permissions-maintenance-db.js');
 var PROTOCOL = process.env.PROTOCOL || 'http:';
 var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
+var INTERNAL_ROUTER = process.env.INTERNAL_ROUTER;
 
 function verifyPermissions(req, permissions, user) {
   var permissionsPermissions = permissions._permissions;
@@ -138,7 +139,7 @@ function updatePermissions(req, res, patch) {
       });    
     }
     if (req.headers['if-match'] == etag) { 
-      if ('_permissions' in patch && 'inheritsPermissonsOf' in patch._permissions) {
+      if ('_permissions' in patch && 'inheritsPermissionsOf' in patch._permissions) {
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
           if (sharingSets.length > 0) {
             lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
@@ -152,12 +153,63 @@ function updatePermissions(req, res, patch) {
             callback();
           }
         }
+        function ifNoCyclesThen(sharingSets, callback) {
+          if (sharingSets === undefined || sharingSets.length == 0) {
+            callback()
+          } else {
+            if (sharingSets.indexOf(subject) == -1) {
+              var headers = {
+                'Accept': 'application/json',
+                'Host': req.headers.host
+              }
+              if (req.headers.authorization !== undefined) {
+                headers.authorization = req.headers.authorization; 
+              }
+              var hostParts = INTERNAL_ROUTER.split(':');
+              var options = {
+                protocol: PROTOCOL,
+                hostname: hostParts[0],
+                path: '/inherits-permissions-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
+                method: 'GET',
+                headers: headers
+              };
+              if (hostParts.length > 1) {
+                options.port = hostParts[1];
+              }
+              var clientReq = http.request(options, function (clientResponse) {
+                lib.getClientResponseBody(clientResponse, function(body) {
+                  if (clientResponse.statusCode == 200) { 
+                    console.log('ifNoCyclesThen: ', body)
+                    if (JSON.parse(body) == false) {
+                      callback();
+                    } else {
+                      lib.badRequest(res, 'may not introduce cycles into permissions inheritance');
+                    }
+                  } else {
+                    var err = `ifNoCyclesThen: unable to retrieve ${options.path} statusCode ${clientResponse.statusCode} text: ${body}`
+                    console.log(err)
+                    lib.internalError(res, err);
+                  }
+                });
+              });
+              clientReq.on('error', function (err) {
+                console.log(`withTeamsDo: error ${err}`)
+                lib.internalError(res, err);
+              });
+              clientReq.end();
+            } else {
+              lib.badRequest(res, 'may not inherit permissions from self');
+            }
+          }
+        }
         var oldSharingSets = permissions._permissions.inheritsPermissionsOf == null ? [] : permissions._permissions.inheritsPermissionsOf;
         var newSharingSets = patch._permissions.inheritsPermissionsOf;
         var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
         var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
         ifSharingSetsAllowDo(removedSharingSets, 'remove', function() {
-          ifSharingSetsAllowDo(addedSharingSets, 'add', primUpdatePermissions);
+          ifSharingSetsAllowDo(addedSharingSets, 'add', function() {
+            ifNoCyclesThen(newSharingSets, primUpdatePermissions)
+          });
         });
       } else {
         primUpdatePermissions();
