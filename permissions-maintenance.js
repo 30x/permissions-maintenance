@@ -237,7 +237,11 @@ function ifAllowedThen(req, res, subject, property, action, callback) {
         callback();
       }
     } else {
-      lib.forbidden(req, res)
+      if (req.headers.authorization === undefined) {
+        lib.unauthorized(req, res)
+      } else {
+        lib.forbidden(req, res)
+      }
     }
   });
 }
