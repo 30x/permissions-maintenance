@@ -71,7 +71,7 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
 
 function withResourcesSharedWithActorsDo(req, res, actors, callback) {
   actors = actors == null ? [INCOGNITO] : actors.concat([INCOGNITO, ANYONE]);
-  var query = `SELECT DISTINCT subject FROM permissions, jsonb_array_elements(permissions.data->'_sharedWith') 
+  var query = `SELECT DISTINCT subject FROM permissions, jsonb_array_elements(permissions.data#>'{_permissions,_sharedWith}') 
                AS sharedWith WHERE sharedWith <@ '${JSON.stringify(actors)}'`;
   pool.query(query, function (err, pgResult) {
     if (err) {
