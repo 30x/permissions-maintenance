@@ -139,81 +139,70 @@ function updatePermissions(req, res, patch) {
       });    
     }
     if (req.headers['if-match'] == etag) { 
-      if ('_permissions' in patch && 'inheritsPermissionsOf' in patch._permissions) {
-        function ifSharingSetsAllowDo(sharingSets, action, callback) {
-          if (sharingSets.length > 0) {
-            lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
-              if (result) {
-                callback();
-              } else {
-                lib.forbidden(req, res);
-              }
-            });
-          } else {
-            callback();
-          }
-        }
-        function ifNoCyclesThen(sharingSets, callback) {
-          if (sharingSets === undefined || sharingSets.length == 0) {
-            callback()
-          } else {
-            if (sharingSets.indexOf(subject) == -1) {
-              var headers = {
-                'Accept': 'application/json',
-                'Host': req.headers.host
-              }
-              if (req.headers.authorization !== undefined) {
-                headers.authorization = req.headers.authorization; 
-              }
-              var hostParts = INTERNAL_ROUTER.split(':');
-              var options = {
-                protocol: PROTOCOL,
-                hostname: hostParts[0],
-                path: '/inherits-permissions-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
-                method: 'GET',
-                headers: headers
-              };
-              if (hostParts.length > 1) {
-                options.port = hostParts[1];
-              }
-              var clientReq = http.request(options, function (clientResponse) {
-                lib.getClientResponseBody(clientResponse, function(body) {
-                  if (clientResponse.statusCode == 200) { 
-                    console.log('ifNoCyclesThen: ', body)
-                    if (JSON.parse(body) == false) {
-                      callback();
-                    } else {
-                      lib.badRequest(res, 'may not introduce cycles into permissions inheritance');
-                    }
-                  } else {
-                    var err = `ifNoCyclesThen: unable to retrieve ${options.path} statusCode ${clientResponse.statusCode} text: ${body}`
-                    console.log(err)
-                    lib.internalError(res, err);
-                  }
-                });
-              });
-              clientReq.on('error', function (err) {
-                console.log(`withTeamsDo: error ${err}`)
-                lib.internalError(res, err);
-              });
-              clientReq.end();
+      function ifSharingSetsAllowDo(sharingSets, action, callback) {
+        if (sharingSets.length > 0) {
+          lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
+            if (result) {
+              callback();
             } else {
-              lib.badRequest(res, 'may not inherit permissions from self');
+              lib.forbidden(req, res);
             }
+          });
+        } else {
+          callback();
+        }
+      }
+      function ifAllowedToInheritFromThen(sharingSets, callback) {
+        if (sharingSets === undefined || sharingSets.length == 0) {
+          callback()
+        } else {
+          if (sharingSets.indexOf(subject) == -1) {
+            var headers = {
+              'Accept': 'application/json',
+              'Host': req.headers.host
+            }
+            if (req.headers.authorization !== undefined) {
+              headers.authorization = req.headers.authorization; 
+            }
+            var hostParts = INTERNAL_ROUTER.split(':');
+            var options = {
+              protocol: PROTOCOL,
+              hostname: hostParts[0],
+              path: '/inherits-permissions-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
+              method: 'GET',
+              headers: headers
+            };
+            if (hostParts.length > 1) {
+              options.port = hostParts[1];
+            }
+            var clientReq = http.request(options, function (clientResponse) {
+              lib.getClientResponseBody(clientResponse, function(body) {
+                if (clientResponse.statusCode == 200) { 
+                  console.log('ifAllowedToInheritFromThen: ', body)
+                  if (JSON.parse(body) == true) {
+                    callback();
+                  } else {
+                    lib.badRequest(res, 'may not introduce cycles into permissions inheritance');
+                  }
+                } else {
+                  var err = `ifAllowedToInheritFromThen: unable to retrieve ${options.path} statusCode ${clientResponse.statusCode} text: ${body}`
+                  console.log(err)
+                  lib.internalError(res, err);
+                }
+              });
+            });
+            clientReq.on('error', function (err) {
+              console.log(`withTeamsDo: error ${err}`)
+              lib.internalError(res, err);
+            });
+            clientReq.end();
+          } else {
+            lib.badRequest(res, 'may not inherit permissions from self');
           }
         }
-        var oldSharingSets = permissions._permissions.inheritsPermissionsOf == null ? [] : permissions._permissions.inheritsPermissionsOf;
-        var newSharingSets = patch._permissions.inheritsPermissionsOf;
-        var removedSharingSets = oldSharingSets.filter(x => newSharingSets.indexOf(x) < 0);
-        var addedSharingSets = newSharingSets.filter(x => oldSharingSets.indexOf(x) < 0);
-        ifSharingSetsAllowDo(removedSharingSets, 'remove', function() {
-          ifSharingSetsAllowDo(addedSharingSets, 'add', function() {
-            ifNoCyclesThen(newSharingSets, primUpdatePermissions)
-          });
-        });
-      } else {
-        primUpdatePermissions();
       }
+      var new_permissions = '_permissions' in patch && 'inheritsPermissionsOf' in patch._permissions ? patch._permissions.inheritsPermissionsOf : [];
+      ifAllowedToInheritFromThen(patch._permissions.inheritsPermissionsOf, primUpdatePermissions);
     } else {
       var err;
       if (req.headers['if-match'] === undefined) {
