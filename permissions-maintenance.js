@@ -178,11 +178,11 @@ function updatePermissions(req, res, patch) {
             var clientReq = http.request(options, function (clientResponse) {
               lib.getClientResponseBody(clientResponse, function(body) {
                 if (clientResponse.statusCode == 200) { 
-                  console.log('ifAllowedToInheritFromThen: ', body)
-                  if (JSON.parse(body) == true) {
+                  var result = JSON.parse(body);
+                  if (result.result == true) {
                     callback();
                   } else {
-                    lib.badRequest(res, 'may not introduce cycles into permissions inheritance');
+                    lib.badRequest(res, result.reason);
                   }
                 } else {
                   var err = `ifAllowedToInheritFromThen: unable to retrieve ${options.path} statusCode ${clientResponse.statusCode} text: ${body}`
