@@ -49,6 +49,7 @@ function createPermissionsThen(req, res, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
   var subject = permissions._resource._self;
   var query = `INSERT INTO permissions (subject, data) values('${subject}', '${JSON.stringify(permissions)}') RETURNING etag`;
+  console.log(query)
   function eventData(pgResult) {
     return {subject: permissions._resource._self, action: 'create', etag: pgResult.rows[0].etag}
   }
