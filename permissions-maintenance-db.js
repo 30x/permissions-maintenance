@@ -49,7 +49,6 @@ function createPermissionsThen(req, res, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
   var subject = permissions._resource._self;
   var query = `INSERT INTO permissions (subject, data) values('${subject}', '${JSON.stringify(permissions)}') RETURNING etag`;
-  console.log(query)
   function eventData(pgResult) {
     return {subject: permissions._resource._self, action: 'create', etag: pgResult.rows[0].etag}
   }
@@ -95,23 +94,13 @@ function withHeirsDo(req, res, securedObject, callback) {
   });
 }
 
-function createTablesThen(callback) {
-  var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag serial, data jsonb);'
-  pool.query(query, function(err, pgResult) {
-    if(err) {
-      console.error('error creating permissions table', err);
-    } else {
-      callback()
-    }
-  });    
-}
-
 function init(callback) {
   var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag serial, data jsonb);'
   pool.query(query, function(err, pgResult) {
     if(err) {
       console.error('error creating permissions table', err);
     } else {
+      console.log(`connected to PG at ${config.host}`);
       eventProducer.init(callback);
     }
   });    
