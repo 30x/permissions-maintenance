@@ -116,11 +116,16 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._self = PROTOCOL + '//' + req.headers.host + '/permissions?' + permissions._resource._self;
+  permissions._permissions._self = `${PROTOCOL}//${req.headers.host}/permissions?${permissions._resource._self}`;
+  var ancestors = permissions._permissions.inheritsPermissionsOf
+  if (ancestors !== undefined) {
+    permissions._permissions.inheritsPermissions = ancestors.map(x => `${PROTOCOL}//${req.headers.host}/permissions?${x}`);
+  }
 }
 
 function getPermissions(req, res, subject) {
   ifAllowedThen(req, res, subject, '_permissions', 'read', function(permissions, etag) {
+    addCalculatedProperties(req, permissions);
     lib.found(req, res, permissions, etag);
   });
 }
@@ -168,7 +173,7 @@ function updatePermissions(req, res, patch) {
             var options = {
               protocol: PROTOCOL,
               hostname: hostParts[0],
-              path: '/inherits-permissions-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
+              path: '/is-allowed-to-inherit-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
               method: 'GET',
               headers: headers
             };
