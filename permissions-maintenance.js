@@ -80,7 +80,7 @@ function createPermissions(req, res, permissions) {
         calculateSharedWith(req, permissions);
         db.createPermissionsThen(req, res, permissions, function(etag) {
           addCalculatedProperties(req, permissions);
-          lib.created(req, res, permissions, permissions._self, etag);
+          lib.created(req, res, permissions, permissions._permissions._self, etag);
         });        
       }
       var sharingSets = permissions._permissions.inheritsPermissionsOf;
