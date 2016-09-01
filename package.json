@@ -14,12 +14,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mpnally/permissions-maintenance.git"
+    "url": "git+https://github.com/30x/permissions-maintenance.git"
   },
   "author": "Martin Nally",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/mpnally/permissions-maintenance/issues"
+    "url": "https://github.com/30x/permissions-maintenance/issues"
   },
-  "homepage": "https://github.com/mpnally/permissions-maintenance#readme"
+  "homepage": "https://github.com/30x/permissions-maintenance#readme"
 }
