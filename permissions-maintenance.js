@@ -12,7 +12,7 @@ var querystring = require('querystring');
 var lib = require('http-helper-functions');
 var db = require('./permissions-maintenance-db.js');
 
-var PROTOCOL = process.env.PROTOCOL || 'http:';
+var INTERNAL_PROTOCOL = process.env.INTERNAL_PROTOCOL || 'http:';
 var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
 var INTERNAL_ROUTER = process.env.INTERNAL_ROUTER;
@@ -116,10 +116,10 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._permissions._self = `${PROTOCOL}//${req.headers.host}/permissions?${permissions._resource._self}`;
+  permissions._permissions._self = `//${req.headers.host}/permissions?${permissions._resource._self}`;
   var ancestors = permissions._permissions.inheritsPermissionsOf
   if (ancestors !== undefined) {
-    permissions._permissions.inheritsPermissions = ancestors.map(x => `${PROTOCOL}//${req.headers.host}/permissions?${x}`);
+    permissions._permissions.inheritsPermissions = ancestors.map(x => `${INTERNAL_PROTOCOL}//${req.headers.host}/permissions?${x}`);
   }
 }
 
@@ -171,7 +171,7 @@ function updatePermissions(req, res, patch) {
             }
             var hostParts = INTERNAL_ROUTER.split(':');
             var options = {
-              protocol: PROTOCOL,
+              INTERNAL_PROTOCOL: INTERNAL_PROTOCOL,
               hostname: hostParts[0],
               path: '/is-allowed-to-inherit-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
               method: 'GET',
