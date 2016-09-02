@@ -17,6 +17,9 @@ var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
 var INTERNAL_ROUTER = process.env.INTERNAL_ROUTER;
 var SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET;
+if (SHIPYARD_PRIVATE_SECRET !== undefined) {
+  SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64');
+}
 
 function verifyPermissions(req, permissions, user) {
   var permissionsPermissions = permissions._permissions;
@@ -320,8 +323,8 @@ function requestHandler(req, res) {
       if (req.method == 'GET') { 
         getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
       } else if (req.method == 'PATCH') { 
-        lib.getServerPostBody(req, res, function(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body) {
-          updatePermissions(req, res, body)
+        lib.getServerPostBody(req, res, function(req, res, body) {
+          updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body)
         });
       } else {
         lib.methodNotAllowed(req, res, ['GET', 'PATCH']);
