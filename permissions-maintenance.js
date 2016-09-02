@@ -72,7 +72,7 @@ function calculateSharedWith(req, permissions) {
 
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime();
-  console.log(`permissions-mainrenance:createPermissions:start, permissons: ${JSON.stringify(permissions)}`);
+  console.log('permissions-maintenance:createPermissions:start');
   var user = lib.getUser(req);
   if (user == null) {
     lib.unauthorized(req, res)
@@ -85,7 +85,7 @@ function createPermissions(req, res, permissions) {
           addCalculatedProperties(req, permissions);
           lib.created(req, res, permissions, permissions._permissions._self, etag);
           var hrend = process.hrtime(hrstart);
-          console.log(`permissions-mainrenance:createPermissions:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
+          console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
         });        
       }
       var sharingSets = permissions._permissions.inheritsPermissionsOf;
@@ -137,7 +137,7 @@ function getPermissions(req, res, subject) {
 
 function updatePermissions(req, res, patch) {
   var hrstart = process.hrtime();
-  console.log(`permissions-mainrenance:updatePermissions:start, patch: ${JSON.stringify(patch)}`)
+  console.log('permissions-maintenance:updatePermissions:start')
   var subject = url.parse(req.url).search.substring(1);
   ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
@@ -149,7 +149,7 @@ function updatePermissions(req, res, patch) {
         addCalculatedProperties(req, patchedPermissions); 
         lib.found(req, res, patchedPermissions, etag);
         var hrend = process.hrtime(hrstart);
-        console.log(`permissions-mainrenance:updatePermissions:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
+        console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
       });    
     }
     if (req.headers['if-match'] == etag) { 
@@ -284,7 +284,7 @@ function getUsersWhoCanSee(req, res, resource) {
 
 function getResourcesSharedWith(req, res, user) {
   var hrstart = process.hrtime();
-  console.log(`permissions-mainrenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
+  console.log(`permissions-maintenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
   var requestingUser = lib.getUser(req);
   user = lib.internalizeURL(user, req.headers.host);
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE)) {
@@ -292,7 +292,7 @@ function getResourcesSharedWith(req, res, user) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
         lib.found(req, res, resources);
         var hrend = process.hrtime(hrstart);
-        console.log(`permissions-maintenance:getResourcesSharedWith:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
+        console.log(`permissions-maintenance:getResourcesSharedWith:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
       });
     });
   } else {
@@ -351,7 +351,15 @@ function requestHandler(req, res) {
 
 var port = process.env.PORT;
 db.init(function(){
-  http.createServer(requestHandler).listen(port, function() {
-    console.log(`server is listening on ${port}`);
+  http.createServer(function(req, res){
+    try {
+      requestHandler(req, res);
+    }
+    catch (err) {
+      console.log(err.stack || err);
+      lib.internalError(res, err.stack || err);
+    }
+  }).listen(port, function() {
+    console.log(`server is listening on ${port} - desperation`);
   });
 });

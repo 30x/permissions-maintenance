@@ -1,2 +1,2 @@
 docker build -t permissions-maintenance .
-docker tag -f permissions-maintenance thirtyx/permissions-maintenance:0.0.1
+docker tag -f permissions-maintenance thirtyx/permissions-maintenance:0.0.2
