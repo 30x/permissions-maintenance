@@ -135,10 +135,9 @@ function getPermissions(req, res, subject) {
   });
 }
 
-function updatePermissions(req, res, patch) {
+function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime();
   console.log('permissions-maintenance:updatePermissions:start')
-  var subject = url.parse(req.url).search.substring(1);
   ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
       var patchedPermissions = lib.mergePatch(permissions, patch);
@@ -321,7 +320,9 @@ function requestHandler(req, res) {
       if (req.method == 'GET') { 
         getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
       } else if (req.method == 'PATCH') { 
-        lib.getServerPostBody(req, res, updatePermissions);
+        lib.getServerPostBody(req, res, function(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body) {
+          updatePermissions(req, res, body)
+        });
       } else {
         lib.methodNotAllowed(req, res, ['GET', 'PATCH']);
       }
