@@ -71,6 +71,8 @@ function calculateSharedWith(req, permissions) {
 }
 
 function createPermissions(req, res, permissions) {
+  var hrstart = process.hrtime();
+  console.log(`permissions-mainrenance:createPermissions:start, permissons: ${JSON.stringify(permissions)}`);
   var user = lib.getUser(req);
   if (user == null) {
     lib.unauthorized(req, res)
@@ -82,6 +84,8 @@ function createPermissions(req, res, permissions) {
         db.createPermissionsThen(req, res, permissions, function(etag) {
           addCalculatedProperties(req, permissions);
           lib.created(req, res, permissions, permissions._permissions._self, etag);
+          var hrend = process.hrtime(hrstart);
+          console.log(`permissions-mainrenance:createPermissions:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
         });        
       }
       var sharingSets = permissions._permissions.inheritsPermissionsOf;
@@ -132,6 +136,8 @@ function getPermissions(req, res, subject) {
 }
 
 function updatePermissions(req, res, patch) {
+  var hrstart = process.hrtime();
+  console.log(`permissions-mainrenance:updatePermissions:start, patch: ${JSON.stringify(patch)}`)
   var subject = url.parse(req.url).search.substring(1);
   ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
     function primUpdatePermissions() {
@@ -142,6 +148,8 @@ function updatePermissions(req, res, patch) {
       db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
         addCalculatedProperties(req, patchedPermissions); 
         lib.found(req, res, patchedPermissions, etag);
+        var hrend = process.hrtime(hrstart);
+        console.log(`permissions-mainrenance:updatePermissions:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
       });    
     }
     if (req.headers['if-match'] == etag) { 
@@ -275,12 +283,16 @@ function getUsersWhoCanSee(req, res, resource) {
 }
 
 function getResourcesSharedWith(req, res, user) {
+  var hrstart = process.hrtime();
+  console.log(`permissions-mainrenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
   var requestingUser = lib.getUser(req);
   user = lib.internalizeURL(user, req.headers.host);
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE)) {
     lib.withTeamsDo(req, res, user, function(actors) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
         lib.found(req, res, resources);
+        var hrend = process.hrtime(hrstart);
+        console.log(`permissions-maintenance:getResourcesSharedWith:sucess, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
       });
     });
   } else {
