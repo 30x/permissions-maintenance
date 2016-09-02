@@ -171,7 +171,7 @@ function updatePermissions(req, res, patch) {
               headers.authorization = req.headers.authorization; 
             }
             if (SHIPYARD_PRIVATE_SECRET !== undefined) {
-              headers.x_routing_api_key = SHIPYARD_PRIVATE_SECRET;
+              headers['x-routing-api-key'] = SHIPYARD_PRIVATE_SECRET;
             }
             var hostParts = INTERNAL_ROUTER.split(':');
             var options = {
