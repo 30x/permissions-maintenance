@@ -12,10 +12,11 @@ var querystring = require('querystring');
 var lib = require('http-helper-functions');
 var db = require('./permissions-maintenance-db.js');
 
-var INTERNAL_PROTOCOL = process.env.INTERNAL_PROTOCOL || 'http:';
+var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http';
 var ANYONE = 'http://apigee.com/users/anyone';
 var INCOGNITO = 'http://apigee.com/users/incognito';
 var INTERNAL_ROUTER = process.env.INTERNAL_ROUTER;
+var SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET;
 
 function verifyPermissions(req, permissions, user) {
   var permissionsPermissions = permissions._permissions;
@@ -119,7 +120,7 @@ function addCalculatedProperties(req, permissions) {
   permissions._permissions._self = `//${req.headers.host}/permissions?${permissions._resource._self}`;
   var ancestors = permissions._permissions.inheritsPermissionsOf
   if (ancestors !== undefined) {
-    permissions._permissions.inheritsPermissions = ancestors.map(x => `${INTERNAL_PROTOCOL}//${req.headers.host}/permissions?${x}`);
+    permissions._permissions.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`);
   }
 }
 
@@ -169,9 +170,12 @@ function updatePermissions(req, res, patch) {
             if (req.headers.authorization !== undefined) {
               headers.authorization = req.headers.authorization; 
             }
+            if (SHIPYARD_PRIVATE_SECRET !== undefined) {
+              headers.x_routing_api_key = SHIPYARD_PRIVATE_SECRET;
+            }
             var hostParts = INTERNAL_ROUTER.split(':');
             var options = {
-              INTERNAL_PROTOCOL: INTERNAL_PROTOCOL,
+              protocol: `${INTERNAL_SCHEME}:`,
               hostname: hostParts[0],
               path: '/is-allowed-to-inherit-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
               method: 'GET',
