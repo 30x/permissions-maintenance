@@ -6,7 +6,7 @@
   "dependencies": {
     "http-helper-functions": "^0.0.7",
     "pg": "^6.0.3",
-    "pg-event-producer": "^0.0.2"
+    "pg-event-producer": "^0.0.3"
   },
   "devDependencies": {},
   "scripts": {
