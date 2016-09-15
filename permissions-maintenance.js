@@ -215,7 +215,7 @@ function updatePermissions(req, res, subject, patch) {
               });
             });
             clientReq.on('error', function (err) {
-              console.log(`withTeamsDo: error ${err}`)
+              console.log(`ifAllowedToInheritFromThen: error ${err}`)
               lib.internalError(res, err);
             });
             clientReq.end();
@@ -294,7 +294,7 @@ function getResourcesSharedWith(req, res, user) {
   var requestingUser = lib.getUser(req);
   user = lib.internalizeURL(user, req.headers.host);
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE)) {
-    lib.withTeamsDo(req, res, user, function(actors) {
+    withTeamsDo(req, res, user, function(actors) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
         lib.found(req, res, resources);
         var hrend = process.hrtime(hrstart);
@@ -312,6 +312,26 @@ function getPermissionsHeirs(req, res, securedObject) {
       lib.found(req, res, heirs);
     });
   });
+}
+
+function withTeamsDo(req, res, user, callback) {
+  if (user !== null) {
+    user = lib.internalizeURL(user);
+    lib.sendInternalRequest(req, res, '/teams?' + user, 'GET', undefined, function (clientResponse) {
+      lib.getClientResponseBody(clientResponse, function(body) {
+        if (clientResponse.statusCode == 200) { 
+          var actors = JSON.parse(body).contents;
+          lib.internalizeURLs(actors, req.headers.host);
+          actors.push(user);
+          callback(actors);
+        } else {
+          var err = `withTeamsDo: unable to retrieve /teams?${user} statusCode ${clientResponse.statusCode}`
+          console.log(err)
+          lib.internalError(res, err);
+        }
+      });
+    });
+  }
 }
 
 function requestHandler(req, res) {
