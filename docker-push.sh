@@ -1,1 +1,1 @@
-docker push thirtyx/permissions-maintenance:0.0.2
+docker push thirtyx/permissions-maintenance:0.0.3
