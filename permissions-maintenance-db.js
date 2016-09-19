@@ -82,7 +82,7 @@ function withResourcesSharedWithActorsDo(req, res, actors, callback) {
 }
 
 function withHeirsDo(req, res, securedObject, callback) {
-  var query = `SELECT subject, data FROM permissions WHERE data @> '{"_permissions": {"inheritsPermissionsOf":["${securedObject}"]}}'`
+  var query = `SELECT subject, data FROM permissions WHERE data @> '{"_resource": {"inheritsPermissionsOf":["${securedObject}"]}}'`
   pool.query(query, function (err, pgResult) {
     if (err) {
       lib.badRequest(res, err);
