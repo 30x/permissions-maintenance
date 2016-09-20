@@ -99,7 +99,7 @@ function init(callback) {
     if(err) {
       console.error('error creating permissions table', err);
     } else {
-      console.log(`connected to PG at ${config.host}`);
+      console.log('permissions-maintenance-db: connected to PG, config: ', config);
       eventProducer.init(callback);
     }
   });    

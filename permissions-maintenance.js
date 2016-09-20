@@ -46,8 +46,8 @@ function verifyPermissions(req, permissions, user) {
   if (governed.inheritsPermissionsOf !== undefined && !Array.isArray(governed.inheritsPermissionsOf)) {
     return 'inheritsPermissionsOf must be an Array'
   }
-  if (permissionsPermissions.grantsUpdateAcessTo === undefined && governed.inheritsPermissionsOf === undefined) {
-    permissionsPermissions.grantsUpdateAcessTo = [user];
+  if (permissionsPermissions.grantsUpdateAccessTo === undefined && governed.inheritsPermissionsOf === undefined) {
+    permissionsPermissions.grantsUpdateAccessTo = [user];
     permissionsPermissions.grantsReadAccessTo = permissionsPermissions.grantsReadAccessTo || [user];
     permissionsPermissions.governs = governed._self;
   }
@@ -55,7 +55,7 @@ function verifyPermissions(req, permissions, user) {
   return null;
 }
 
-var OPERATIONPROPERTIES = ['grantsCreateAcessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAccessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
+var OPERATIONPROPERTIES = ['grantsCreateAccessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAccessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
 var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
 
 function calculateSharedWith(req, permissions) {
