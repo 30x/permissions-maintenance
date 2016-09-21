@@ -47,7 +47,7 @@ function deletePermissionsThen(req, res, subject, callback) {
 function createPermissionsThen(req, res, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
   var subject = permissions._resource._self;
-  var query = `INSERT INTO permissions (subject, data) values('${subject}', '${JSON.stringify(permissions)}') RETURNING etag`;
+  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', 1, '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
     return {subject: permissions._resource._self, action: 'create', etag: pgResult.rows[0].etag}
   }
@@ -59,7 +59,7 @@ function createPermissionsThen(req, res, permissions, callback) {
 function updatePermissionsThen(req, res, subject, patchedPermissions, etag, callback) {
   lib.internalizeURLs(patchedPermissions, req.headers.host);
   var key = lib.internalizeURL(subject, req.headers.host);
-  var query = `UPDATE permissions SET data = ('${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
+  var query = `UPDATE permissions SET (etag, data) = (${(etag+1) % 2147483647}, '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
   function eventData(pgResult) {
     return {subject: patchedPermissions._resource._self, action: 'update', etag: pgResult.rows[0].etag}
   }
@@ -94,7 +94,7 @@ function withHeirsDo(req, res, securedObject, callback) {
 }
 
 function init(callback) {
-  var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag serial, data jsonb);'
+  var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag int, data jsonb);'
   pool.query(query, function(err, pgResult) {
     if(err) {
       console.error('error creating permissions table', err);
