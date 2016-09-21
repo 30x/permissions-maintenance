@@ -239,21 +239,13 @@ function updatePermissions(req, res, subject, patch) {
 }
 
 function ifAllowedThen(req, res, subject, property, action, callback) {
-  lib.withAllowedDo(req, res, subject, property, action, function(answer) {
-    if (answer) {
-      if (property == '_permissions') {
-        db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-          callback(permissions, etag);
-        });
-      } else {
-        callback();
-      }
+  lib.ifAllowedThen(req, res, subject, property, action, function() {
+    if (property == '_permissions') {
+      db.withPermissionsDo(req, res, subject, function(permissions, etag) {
+        callback(permissions, etag);
+      });
     } else {
-      if (req.headers.authorization === undefined) {
-        lib.unauthorized(req, res)
-      } else {
-        lib.forbidden(req, res)
-      }
+      callback();
     }
   });
 }
@@ -337,7 +329,7 @@ function withTeamsDo(req, res, user, callback) {
 function requestHandler(req, res) {
   if (req.url == '/permissions') {
     if (req.method == 'POST') {
-      lib.getServerPostBody(req, res, createPermissions);
+      lib.getServerPostObject(req, res, createPermissions);
     } else { 
       lib.methodNotAllowed(req, res, ['POST']);
     }
@@ -347,7 +339,7 @@ function requestHandler(req, res) {
       if (req.method == 'GET') { 
         getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
       } else if (req.method == 'PATCH') { 
-        lib.getServerPostBody(req, res, function(req, res, body) {
+        lib.getServerPostObject(req, res, function(req, res, body) {
           updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body)
         });
       } else {
