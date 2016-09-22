@@ -46,10 +46,10 @@ function deletePermissionsThen(req, res, subject, callback) {
 
 function createPermissionsThen(req, res, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
-  var subject = permissions._resource._self;
+  var subject = permissions._resource.self;
   var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', 1, '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: permissions._resource._self, action: 'create', etag: pgResult.rows[0].etag}
+    return {subject: permissions._resource.self, action: 'create', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
     callback(pgResult.rows[0].etag);
@@ -61,7 +61,7 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
   var key = lib.internalizeURL(subject, req.headers.host);
   var query = `UPDATE permissions SET (etag, data) = (${(etag+1) % 2147483647}, '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: patchedPermissions._resource._self, action: 'update', etag: pgResult.rows[0].etag}
+    return {subject: patchedPermissions._resource.self, action: 'update', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, res, pool, query, 'permissions', eventData, eventProducer, function(pgResult, pgEventResult) {
     callback(pgResult.rows[0].etag);

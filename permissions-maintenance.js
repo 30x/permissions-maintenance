@@ -40,8 +40,8 @@ function verifyPermissions(req, permissions, user) {
     return 'invalid JSON: "_resource" property not set';
   }
   var governed = permissions._resource;
-  if (governed._self === undefined) {
-    return 'must provide _self for governed resource'
+  if (governed.self === undefined) {
+    return 'must provide self for governed resource'
   }
   if (governed.inheritsPermissionsOf !== undefined && !Array.isArray(governed.inheritsPermissionsOf)) {
     return 'inheritsPermissionsOf must be an Array'
@@ -49,7 +49,7 @@ function verifyPermissions(req, permissions, user) {
   if (permissionsPermissions.grantsUpdateAccessTo === undefined && governed.inheritsPermissionsOf === undefined) {
     permissionsPermissions.grantsUpdateAccessTo = [user];
     permissionsPermissions.grantsReadAccessTo = permissionsPermissions.grantsReadAccessTo || [user];
-    permissionsPermissions.governs = governed._self;
+    permissionsPermissions.governs = governed.self;
   }
 
   return null;
@@ -86,7 +86,7 @@ function createPermissions(req, res, permissions) {
         calculateSharedWith(req, permissions);
         db.createPermissionsThen(req, res, permissions, function(etag) {
           addCalculatedProperties(req, permissions);
-          lib.created(req, res, permissions, permissions._permissions._self, etag);
+          lib.created(req, res, permissions, permissions._permissions.self, etag);
           var hrend = process.hrtime(hrstart);
           console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
         });        
@@ -94,7 +94,7 @@ function createPermissions(req, res, permissions) {
       var sharingSets = permissions._resource.inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
-        var subject = lib.internalizeURL(permissions._resource._self);
+        var subject = lib.internalizeURL(permissions._resource.self);
         if (sharingSets.indexOf(subject) == -1) {
           var count = 0;
           for (var i=0; i < sharingSets.length; i++) {
@@ -124,7 +124,7 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._permissions._self = `//${req.headers.host}/permissions?${permissions._resource._self}`;
+  permissions._permissions.self = `//${req.headers.host}/permissions?${permissions._resource.self}`;
   var ancestors = permissions._resource.inheritsPermissionsOf
   if (ancestors !== undefined) {
     permissions._permissions.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`);
