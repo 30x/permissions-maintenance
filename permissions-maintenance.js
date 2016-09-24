@@ -142,6 +142,19 @@ function getPermissions(req, res, subject) {
   });
 }
 
+function deletePermissions(req, res, subject) {
+  var hrstart = process.hrtime();
+  console.log(`permissions-maintenance:deletePermissions:start subject: ${subject}`);
+  lib.ifAllowedThen(req, res, subject, '_permissions', 'delete', function() {
+    db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
+      addCalculatedProperties(req, permissions);
+      lib.found(req, res, permissions, etag);
+      var hrend = process.hrtime(hrstart);
+      console.log(`permissions-maintenance:deletePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
+    })
+  })
+}
+
 function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime();
   console.log('permissions-maintenance:updatePermissions:start')
@@ -327,45 +340,41 @@ function withTeamsDo(req, res, user, callback) {
 }
 
 function requestHandler(req, res) {
-  if (req.url == '/permissions') {
-    if (req.method == 'POST') {
-      lib.getServerPostObject(req, res, createPermissions);
-    } else { 
-      lib.methodNotAllowed(req, res, ['POST']);
-    }
-  } else {
-    var req_url = url.parse(req.url);
-    if (req_url.pathname == '/permissions' && req_url.search !== null) {
-      if (req.method == 'GET') { 
-        getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
-      } else if (req.method == 'PATCH') { 
+  if (req.url == '/permissions')
+    if (req.method == 'POST')
+      lib.getServerPostObject(req, res, createPermissions)
+    else
+      lib.methodNotAllowed(req, res, ['POST'])
+  else {
+    var req_url = url.parse(req.url)
+    if (req_url.pathname == '/permissions' && req_url.search !== null)
+      if (req.method == 'GET') 
+        getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+      else if (req.method == 'DELETE') 
+        deletePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+      else if (req.method == 'PATCH')  
         lib.getServerPostObject(req, res, function(req, res, body) {
           updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body)
-        });
-      } else {
-        lib.methodNotAllowed(req, res, ['GET', 'PATCH']);
-      }
-    } else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null) {
-      if (req.method == 'GET') {
-        getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
-      } else {
-        lib.methodNotAllowed(req, res, ['GET']);
-      }
-    } else  if (req_url.pathname == '/permissions-heirs' && req_url.search !== null) {
-      if (req.method == 'GET') {
+        })
+      else 
+        lib.methodNotAllowed(req, res, ['GET', 'PATCH'])
+    else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null)
+      if (req.method == 'GET')
+        getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+      else
+        lib.methodNotAllowed(req, res, ['GET'])
+    else  if (req_url.pathname == '/permissions-heirs' && req_url.search !== null)
+      if (req.method == 'GET') 
         getPermissionsHeirs(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
-      } else {
+      else
         lib.methodNotAllowed(req, res, ['GET']);
-      }
-    } else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null) {
-      if (req.method == 'GET') {
+    else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
+      if (req.method == 'GET')
         getUsersWhoCanSee(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host));
-      } else {
+      else
         lib.methodNotAllowed(req, res, ['GET']);
-      }
-    } else {
+    else
       lib.notFound(req, res);
-    }
   }
 }
 
