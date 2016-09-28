@@ -159,62 +159,63 @@ function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime();
   console.log('permissions-maintenance:updatePermissions:start')
   ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
-    var patchedPermissions = lib.mergePatch(permissions, patch);
-    function primUpdatePermissions() {
-      calculateSharedWith(req, patchedPermissions);
-      patchedPermissions._permissions.modifier = lib.getUser(req);
-      patchedPermissions._permissions.modified = new Date().toISOString();
-      db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
-        addCalculatedProperties(req, patchedPermissions); 
-        lib.found(req, res, patchedPermissions, etag);
-        var hrend = process.hrtime(hrstart);
-        console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
-      });    
-    }
-    if (req.headers['if-match'] == etag) { 
-      function ifSharingSetsAllowDo(sharingSets, action, callback) {
-        if (sharingSets.length > 0) {
-          lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
-            if (result) {
-              callback();
-            } else {
-              lib.forbidden(req, res);
-            }
-          });
-        } else
-          callback()
+    lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
+      function primUpdatePermissions() {
+        calculateSharedWith(req, patchedPermissions);
+        patchedPermissions._permissions.modifier = lib.getUser(req);
+        patchedPermissions._permissions.modified = new Date().toISOString();
+        db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
+          addCalculatedProperties(req, patchedPermissions); 
+          lib.found(req, res, patchedPermissions, etag);
+          var hrend = process.hrtime(hrstart);
+          console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
+        });    
       }
-      function ifAllowedToInheritFromThen(sharingSets, callback) {
-        if (sharingSets === undefined || sharingSets.length == 0) {
-          callback()
-        } else {
-          if (sharingSets.indexOf(subject) == -1) {
-            var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
-            lib.sendInternalRequest(req, res, path, 'GET', null, function(clientResponse) {
-              lib.getClientResponseBody(clientResponse, function(body) {
-                if (clientResponse.statusCode == 200) { 
-                  var result = JSON.parse(body);
-                  if (result.result == true)
-                    callback();
-                  else
-                    lib.badRequest(res, result.reason);
-                } else {
-                  var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
-                  console.log(err)
-                  lib.internalError(res, err)
-                }
-              })
-            })
-          } else 
-            lib.badRequest(res, 'may not inherit permissions from self')
+      if (req.headers['if-match'] == etag) { 
+        function ifSharingSetsAllowDo(sharingSets, action, callback) {
+          if (sharingSets.length > 0) {
+            lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
+              if (result) {
+                callback();
+              } else {
+                lib.forbidden(req, res);
+              }
+            });
+          } else
+            callback()
         }
+        function ifAllowedToInheritFromThen(sharingSets, callback) {
+          if (sharingSets === undefined || sharingSets.length == 0) {
+            callback()
+          } else {
+            if (sharingSets.indexOf(subject) == -1) {
+              var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
+              lib.sendInternalRequest(req, res, path, 'GET', null, function(clientResponse) {
+                lib.getClientResponseBody(clientResponse, function(body) {
+                  if (clientResponse.statusCode == 200) { 
+                    var result = JSON.parse(body);
+                    if (result.result == true)
+                      callback();
+                    else
+                      lib.badRequest(res, result.reason);
+                  } else {
+                    var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
+                    console.log(err)
+                    lib.internalError(res, err)
+                  }
+                })
+              })
+            } else 
+              lib.badRequest(res, 'may not inherit permissions from self')
+          }
+        }
+        var new_permissions = '_resource' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._resource ? patchedPermissions._resource.inheritsPermissionsOf : [];
+        ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions);
+      } else {
+        var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
+        lib.badRequest(res, err)
       }
-      var new_permissions = '_resource' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._resource ? patchedPermissions._resource.inheritsPermissionsOf : [];
-      ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions);
-    } else {
-      var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
-      lib.badRequest(res, err)
-    }
+    })
   })
 }
 
