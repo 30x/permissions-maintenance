@@ -159,8 +159,8 @@ function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime();
   console.log('permissions-maintenance:updatePermissions:start')
   ifAllowedThen(req, res, subject, '_permissions', 'update', function(permissions, etag) {
+    var patchedPermissions = lib.mergePatch(permissions, patch);
     function primUpdatePermissions() {
-      var patchedPermissions = lib.mergePatch(permissions, patch);
       calculateSharedWith(req, patchedPermissions);
       patchedPermissions._permissions.modifier = lib.getUser(req);
       patchedPermissions._permissions.modified = new Date().toISOString();
@@ -181,86 +181,52 @@ function updatePermissions(req, res, subject, patch) {
               lib.forbidden(req, res);
             }
           });
-        } else {
-          callback();
-        }
+        } else
+          callback()
       }
       function ifAllowedToInheritFromThen(sharingSets, callback) {
         if (sharingSets === undefined || sharingSets.length == 0) {
           callback()
         } else {
           if (sharingSets.indexOf(subject) == -1) {
-            var headers = {
-              'Accept': 'application/json',
-              'Host': req.headers.host
-            }
-            if (req.headers.authorization !== undefined) {
-              headers.authorization = req.headers.authorization; 
-            }
-            if (SHIPYARD_PRIVATE_SECRET !== undefined) {
-              headers['x-routing-api-key'] = SHIPYARD_PRIVATE_SECRET;
-            }
-            var hostParts = INTERNAL_ROUTER.split(':');
-            var options = {
-              protocol: `${INTERNAL_SCHEME}:`,
-              hostname: hostParts[0],
-              path: '/is-allowed-to-inherit-from?' + sharingSets.map(x => `sharingSet=${x}`).join('&') + '&subject=' + subject,
-              method: 'GET',
-              headers: headers
-            };
-            if (hostParts.length > 1) {
-              options.port = hostParts[1];
-            }
-            var clientReq = http.request(options, function (clientResponse) {
+            var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
+            lib.sendInternalRequest(req, res, path, 'GET', null, function(clientResponse) {
               lib.getClientResponseBody(clientResponse, function(body) {
                 if (clientResponse.statusCode == 200) { 
                   var result = JSON.parse(body);
-                  if (result.result == true) {
+                  if (result.result == true)
                     callback();
-                  } else {
+                  else
                     lib.badRequest(res, result.reason);
-                  }
                 } else {
-                  var err = `ifAllowedToInheritFromThen: unable to retrieve ${options.path} statusCode ${clientResponse.statusCode} text: ${body}`
+                  var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
                   console.log(err)
-                  lib.internalError(res, err);
+                  lib.internalError(res, err)
                 }
-              });
-            });
-            clientReq.on('error', function (err) {
-              console.log(`ifAllowedToInheritFromThen: error ${err}`)
-              lib.internalError(res, err);
-            });
-            clientReq.end();
-          } else {
-            lib.badRequest(res, 'may not inherit permissions from self');
-          }
+              })
+            })
+          } else 
+            lib.badRequest(res, 'may not inherit permissions from self')
         }
       }
-      var new_permissions = '_resurce' in patch && 'inheritsPermissionsOf' in patch._resource ? patch._resource.inheritsPermissionsOf : [];
-      ifAllowedToInheritFromThen(patch._resource.inheritsPermissionsOf, primUpdatePermissions);
+      var new_permissions = '_resource' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._resource ? patchedPermissions._resource.inheritsPermissionsOf : [];
+      ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions);
     } else {
-      var err;
-      if (req.headers['if-match'] === undefined) {
-        err = 'missing If-Match header' + JSON.stringify(req.headers);
-      } else {
-        err = 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag;
-      }
-      lib.badRequest(res, err);
+      var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
+      lib.badRequest(res, err)
     }
-  });
+  })
 }
 
 function ifAllowedThen(req, res, subject, property, action, callback) {
   lib.ifAllowedThen(req, res, subject, property, action, function() {
-    if (property == '_permissions') {
+    if (property == '_permissions')
       db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-        callback(permissions, etag);
-      });
-    } else {
-      callback();
-    }
-  });
+        callback(permissions, etag)
+      })
+    else 
+      callback()
+  })
 }
 
 function addUsersWhoCanSee(req, res, permissions, result, callback) {
