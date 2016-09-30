@@ -30,16 +30,16 @@ function verifyPermissions(req, permissions, user) {
   if (rslt !== null) {
     return result;
   }
-  if (permissionsPermissions.isA == undefined && permissions._resource !== undefined) {
+  if (permissionsPermissions.isA == undefined && permissions._self !== undefined) {
     permissionsPermissions.isA = 'Permissions';
   }
   if (permissionsPermissions.isA != 'Permissions') {
     return 'invalid JSON: "isA" property not set to "Permissions"';
   }
-  if (permissions._resource === undefined) {
-    return 'invalid JSON: "_resource" property not set';
+  if (permissions._self === undefined) {
+    return 'invalid JSON: "_self" property not set';
   }
-  var governed = permissions._resource;
+  var governed = permissions._self;
   if (governed.self === undefined) {
     return 'must provide self for governed resource'
   }
@@ -69,7 +69,7 @@ function calculateSharedWith(req, permissions) {
   }
   var result = {};
   listUsers(permissions, result);
-  listUsers(permissions._resource, result);
+  listUsers(permissions._self, result);
   permissions._permissions._sharedWith = Object.keys(result);
 }
 
@@ -91,10 +91,10 @@ function createPermissions(req, res, permissions) {
           console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
         });        
       }
-      var sharingSets = permissions._resource.inheritsPermissionsOf;
+      var sharingSets = permissions._self.inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
-        var subject = lib.internalizeURL(permissions._resource.self);
+        var subject = lib.internalizeURL(permissions._self.self);
         if (sharingSets.indexOf(subject) == -1) {
           var count = 0;
           for (var i=0; i < sharingSets.length; i++) {
@@ -124,8 +124,8 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._permissions.self = `//${req.headers.host}/permissions?${permissions._resource.self}`;
-  var ancestors = permissions._resource.inheritsPermissionsOf
+  permissions._permissions.self = `//${req.headers.host}/permissions?${permissions._self.self}`;
+  var ancestors = permissions._self.inheritsPermissionsOf
   if (ancestors !== undefined) {
     permissions._permissions.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`);
   }
@@ -209,7 +209,7 @@ function updatePermissions(req, res, subject, patch) {
               lib.badRequest(res, 'may not inherit permissions from self')
           }
         }
-        var new_permissions = '_resource' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._resource ? patchedPermissions._resource.inheritsPermissionsOf : [];
+        var new_permissions = '_self' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._self ? patchedPermissions._self.inheritsPermissionsOf : [];
         ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions);
       } else {
         var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
@@ -237,7 +237,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
       result[sharedWith[i]] = true;
     }
   }
-  var sharingSets = permissions._resource.inheritsPermissionsOf;
+  var sharingSets = permissions._self.inheritsPermissionsOf;
   if (sharingSets !== undefined) {
     var count = 0;
     for (let j = 0; j < sharingSets.length; j++) {
@@ -279,7 +279,7 @@ function getResourcesSharedWith(req, res, user) {
 }
 
 function getPermissionsHeirs(req, res, securedObject) {
-  ifAllowedThen(req, res, securedObject, '_resource', 'read', function() {
+  ifAllowedThen(req, res, securedObject, '_self', 'read', function() {
     db.withHeirsDo(req, res, securedObject, function(heirs) {
       lib.found(req, res, heirs);
     });
