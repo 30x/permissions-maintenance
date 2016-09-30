@@ -265,6 +265,7 @@ function getResourcesSharedWith(req, res, user) {
   console.log(`permissions-maintenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
   var requestingUser = lib.getUser(req);
   user = lib.internalizeURL(user, req.headers.host);
+  console.log(user, requestingUser)
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE)) {
     withTeamsDo(req, res, user, function(actors) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
@@ -289,7 +290,7 @@ function getPermissionsHeirs(req, res, securedObject) {
 function withTeamsDo(req, res, user, callback) {
   if (user !== null) {
     user = lib.internalizeURL(user);
-    lib.sendInternalRequest(req, res, '/teams?' + user, 'GET', undefined, function (clientResponse) {
+    lib.sendInternalRequest(req, res, `/teams?${user.replace('#', '%23')}`, 'GET', undefined, function (clientResponse) {
       lib.getClientResponseBody(clientResponse, function(body) {
         if (clientResponse.statusCode == 200) { 
           var actors = JSON.parse(body).contents;
