@@ -43,8 +43,6 @@ function verifyPermissions(req, permissions, user) {
   return null
 }
 
-var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
-
 function calculateSharedWith(req, permissions) {
   function listUsers (obj, result) {
     for (var operation in obj) {
