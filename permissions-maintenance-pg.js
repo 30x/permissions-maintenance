@@ -48,10 +48,10 @@ function deletePermissionsThen(req, subject, callback) {
 
 function createPermissionsThen(req, permissions, callback) {
   lib.internalizeURLs(permissions, req.headers.host);
-  var subject = permissions._self.self;
+  var subject = permissions._subject;
   var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', 1, '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: permissions._self.self, action: 'create', etag: pgResult.rows[0].etag}
+    return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
     if (err) 
@@ -66,7 +66,7 @@ function updatePermissionsThen(req, subject, patchedPermissions, etag, callback)
   var key = lib.internalizeURL(subject, req.headers.host);
   var query = `UPDATE permissions SET (etag, data) = (${(etag+1) % 2147483647}, '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: patchedPermissions._self.self, action: 'update', etag: pgResult.rows[0].etag}
+    return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag}
   }
   pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
     if (err) 
@@ -89,12 +89,12 @@ function withResourcesSharedWithActorsDo(req, actors, callback) {
 }
 
 function withHeirsDo(req, securedObject, callback) {
-  var query = `SELECT subject, data FROM permissions WHERE data @> '{"_self": {"inheritsPermissionsOf":["${securedObject}"]}}'`
+  var query = `SELECT subject, data FROM permissions WHERE data @> '{"_inheritsPermissionsOf":["${securedObject}"]}'`
   pool.query(query, function (err, pgResult) {
     if (err) 
       callback(err) 
     else 
-      callback(null, pgResult.rows.map(row => row.data._self))
+      callback(null, pgResult.rows.map(row => row.data._subject))
   })
 }
 

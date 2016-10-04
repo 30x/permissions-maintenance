@@ -30,26 +30,16 @@ function verifyPermissions(req, permissions, user) {
   if (rslt !== null) {
     return result;
   }
-  if (permissionsPermissions.isA == undefined && permissions._self !== undefined) {
-    permissionsPermissions.isA = 'Permissions';
-  }
-  if (permissionsPermissions.isA != 'Permissions') {
-    return 'invalid JSON: "isA" property not set to "Permissions"';
-  }
-  if (permissions._self === undefined) {
-    return 'invalid JSON: "_self" property not set';
+  if (permissions._subject === undefined) {
+    return 'invalid JSON: "_subject" property not set';
   }
   var governed = permissions._self;
-  if (governed.self === undefined) {
-    return 'must provide self for governed resource'
+  if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf)) {
+    return '_inheritsPermissionsOf must be an Array'
   }
-  if (governed.inheritsPermissionsOf !== undefined && !Array.isArray(governed.inheritsPermissionsOf)) {
-    return 'inheritsPermissionsOf must be an Array'
-  }
-  if (permissionsPermissions.update === undefined && governed.inheritsPermissionsOf === undefined) {
+  if (permissionsPermissions.update === undefined && permissions._inheritsPermissionsOf === undefined) {
     permissionsPermissions.update = [user];
     permissionsPermissions.read = permissionsPermissions.read || [user];
-    permissionsPermissions.governs = governed.self;
   }
 
   return null;
@@ -68,8 +58,8 @@ function calculateSharedWith(req, permissions) {
     }
   }
   var result = {};
-  listUsers(permissions._permissions, result);
-  listUsers(permissions._self, result);
+  if (permissions._permissions) listUsers(permissions._permissions, result);
+  if (permissions._self) listUsers(permissions._self, result);
   permissions._sharedWith = Object.keys(result);
 }
 
@@ -86,15 +76,16 @@ function createPermissions(req, res, permissions) {
         calculateSharedWith(req, permissions);
         db.createPermissionsThen(req, res, permissions, function(etag) {
           addCalculatedProperties(req, permissions);
-          lib.created(req, res, permissions, permissions._permissions.self, etag);
+          var permissionsURL =  `//${req.headers.host}/permissions?${permissions._subject}`;
+          lib.created(req, res, permissions, permissionsURL, etag);
           var hrend = process.hrtime(hrstart);
           console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
         });        
       }
-      var sharingSets = permissions._self.inheritsPermissionsOf;
+      var sharingSets = permissions._inheritsPermissionsOf;
       if (sharingSets !== undefined && sharingSets.length > 0) {
         sharingSets = sharingSets.map(x => lib.internalizeURL(x));
-        var subject = lib.internalizeURL(permissions._self.self);
+        var subject = lib.internalizeURL(permissions._subject);
         if (sharingSets.indexOf(subject) == -1) {
           var count = 0;
           for (var i=0; i < sharingSets.length; i++) {
@@ -124,8 +115,7 @@ function createPermissions(req, res, permissions) {
 }
 
 function addCalculatedProperties(req, permissions) {
-  permissions._permissions.self = `//${req.headers.host}/permissions?${permissions._self.self}`;
-  var ancestors = permissions._self.inheritsPermissionsOf
+  var ancestors = permissions._inheritsPermissionsOf
   if (ancestors !== undefined) {
     permissions._permissions.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`);
   }
@@ -209,7 +199,7 @@ function updatePermissions(req, res, subject, patch) {
               lib.badRequest(res, 'may not inherit permissions from self')
           }
         }
-        var new_permissions = '_self' in patchedPermissions && 'inheritsPermissionsOf' in patchedPermissions._self ? patchedPermissions._self.inheritsPermissionsOf : [];
+        var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : [];
         ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions);
       } else {
         var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
@@ -237,7 +227,7 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
       result[sharedWith[i]] = true;
     }
   }
-  var sharingSets = permissions._self.inheritsPermissionsOf;
+  var sharingSets = permissions._inheritsPermissionsOf;
   if (sharingSets !== undefined) {
     var count = 0;
     for (let j = 0; j < sharingSets.length; j++) {
@@ -245,9 +235,8 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
         addUsersWhoCanSee(req, res, permissions, result, function() {if (++count == sharingSets.length) {callback();}});
       });
     }
-  } else {
-    callback();
-  }
+  } else
+    callback()
 }
 
 function getUsersWhoCanSee(req, res, resource) {
@@ -256,8 +245,8 @@ function getUsersWhoCanSee(req, res, resource) {
   ifAllowedThen(req, res, resource, '_permissions', 'read', function (permissions, etag) {
     addUsersWhoCanSee(req, res, permissions, result, function() {
       lib.found(req, res, Object.keys(result));
-    });
-  });
+    })
+  })
 }
 
 function getResourcesSharedWith(req, res, user) {
