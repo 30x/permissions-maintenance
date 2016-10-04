@@ -26,7 +26,7 @@ function withPermissionsDo(req, subject, callback) {
         callback(404)
       else {
         var row = pgResult.rows[0];
-        callback(null, row.data, row.etag);
+        callback(null, row.data, row.etag)
       }
     }
   });

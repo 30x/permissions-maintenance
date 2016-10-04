@@ -22,45 +22,42 @@ if (SHIPYARD_PRIVATE_SECRET !== undefined) {
 }
 
 function verifyPermissions(req, permissions, user) {
-  var permissionsPermissions = permissions._permissions;
-  if (permissionsPermissions === undefined) {
-    permissionsPermissions = permissions._permissions = {};
-  }
-  var rslt = lib.setStandardCreationProperties(req, permissionsPermissions, user);
-  if (rslt !== null) {
-    return result;
-  }
-  if (permissions._subject === undefined) {
+  if (permissions._subject === undefined) 
     return 'invalid JSON: "_subject" property not set';
-  }
-  var governed = permissions._self;
-  if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf)) {
+  if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
     return '_inheritsPermissionsOf must be an Array'
-  }
-  if (permissionsPermissions.update === undefined && permissions._inheritsPermissionsOf === undefined) {
-    permissionsPermissions.update = [user];
-    permissionsPermissions.read = permissionsPermissions.read || [user];
-  }
-
-  return null;
+  var permissionsPermissions = permissions._permissions
+  if (permissionsPermissions === undefined) 
+    permissionsPermissions = permissions._permissions = {}
+  if (permissions._inheritsPermissionsOf === undefined) 
+    if (permissionsPermissions === undefined || permissionsPermissions.update === undefined) {
+      if (permissionsPermissions === undefined) 
+        permissionsPermissions = permissions._permissions = {}
+      permissionsPermissions.update = [user]
+      permissionsPermissions.read = permissionsPermissions.read || [user]
+    }
+  permissions._metadata = {}
+  var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
+  if (rslt !== null) 
+    return result
+  return null
 }
 
 var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
 
 function calculateSharedWith(req, permissions) {
   function listUsers (obj, result) {
-    //console.log(Object.keys(obj).filter(x => OPERATIONS.indexOf(x) < 0))
-    for (var i = 0; i < OPERATIONS.length; i++) {
-      var actors = obj[OPERATIONS[i]];
-      if (actors !== undefined) {
-        for (var j = 0; j < actors.length; j++) {result[actors[j]] = true;}
-      }
+    for (var operation in obj) {
+      var actors = obj[operation]
+      if (actors !== undefined)
+        for (var j = 0; j < actors.length; j++) 
+          result[actors[j]] = true
     }
   }
-  var result = {};
-  if (permissions._permissions) listUsers(permissions._permissions, result);
-  if (permissions._self) listUsers(permissions._self, result);
-  permissions._sharedWith = Object.keys(result);
+  var result = {}
+  if (permissions._permissions) listUsers(permissions._permissions, result)
+  if (permissions._self) listUsers(permissions._self, result)
+  permissions._sharedWith = Object.keys(result)
 }
 
 function createPermissions(req, res, permissions) {
@@ -152,14 +149,14 @@ function updatePermissions(req, res, subject, patch) {
     lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
       function primUpdatePermissions() {
         calculateSharedWith(req, patchedPermissions);
-        patchedPermissions._permissions.modifier = lib.getUser(req);
-        patchedPermissions._permissions.modified = new Date().toISOString();
+        patchedPermissions._metadata.modifier = lib.getUser(req);
+        patchedPermissions._metadata.modified = new Date().toISOString();
         db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
           addCalculatedProperties(req, patchedPermissions); 
           lib.found(req, res, patchedPermissions, etag);
           var hrend = process.hrtime(hrstart);
-          console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`);
-        });    
+          console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+        })
       }
       if (req.headers['if-match'] == etag) { 
         function ifSharingSetsAllowDo(sharingSets, action, callback) {
