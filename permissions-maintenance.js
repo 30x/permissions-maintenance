@@ -46,29 +46,29 @@ function verifyPermissions(req, permissions, user) {
   if (governed.inheritsPermissionsOf !== undefined && !Array.isArray(governed.inheritsPermissionsOf)) {
     return 'inheritsPermissionsOf must be an Array'
   }
-  if (permissionsPermissions.grantsUpdateAccessTo === undefined && governed.inheritsPermissionsOf === undefined) {
-    permissionsPermissions.grantsUpdateAccessTo = [user];
-    permissionsPermissions.grantsReadAccessTo = permissionsPermissions.grantsReadAccessTo || [user];
+  if (permissionsPermissions.update === undefined && governed.inheritsPermissionsOf === undefined) {
+    permissionsPermissions.update = [user];
+    permissionsPermissions.read = permissionsPermissions.read || [user];
     permissionsPermissions.governs = governed.self;
   }
 
   return null;
 }
 
-var OPERATIONPROPERTIES = ['grantsCreateAccessTo', 'grantsReadAccessTo', 'grantsUpdateAccessTo', 'grantsDeleteAccessTo', 'grantsAddAccessTo', 'grantsRemoveAccessTo'];
 var OPERATIONS = ['create', 'read', 'update', 'delete', 'add', 'remove'];
 
 function calculateSharedWith(req, permissions) {
   function listUsers (obj, result) {
-    for (var i = 0; i < OPERATIONPROPERTIES.length; i++) {
-      var actors = obj[OPERATIONPROPERTIES[i]];
+    //console.log(Object.keys(obj).filter(x => OPERATIONS.indexOf(x) < 0))
+    for (var i = 0; i < OPERATIONS.length; i++) {
+      var actors = obj[OPERATIONS[i]];
       if (actors !== undefined) {
         for (var j = 0; j < actors.length; j++) {result[actors[j]] = true;}
       }
     }
   }
   var result = {};
-  listUsers(permissions, result);
+  listUsers(permissions._permissions, result);
   listUsers(permissions._self, result);
   permissions._permissions._sharedWith = Object.keys(result);
 }
@@ -290,7 +290,8 @@ function getPermissionsHeirs(req, res, securedObject) {
 function withTeamsDo(req, res, user, callback) {
   if (user !== null) {
     user = lib.internalizeURL(user);
-    lib.sendInternalRequest(req, res, `/teams?${user.replace('#', '%23')}`, 'GET', undefined, function (clientResponse) {
+    var teamsURL = `/teams?${user.replace('#', '%23')}`
+    lib.sendInternalRequest(req, res, teamsURL, 'GET', undefined, function (clientResponse) {
       lib.getClientResponseBody(clientResponse, function(body) {
         if (clientResponse.statusCode == 200) { 
           var actors = JSON.parse(body).contents;
@@ -298,7 +299,7 @@ function withTeamsDo(req, res, user, callback) {
           actors.push(user);
           callback(actors);
         } else {
-          var err = `withTeamsDo: unable to retrieve /teams?${user} statusCode ${clientResponse.statusCode}`
+          var err = `withTeamsDo: unable to retrieve ${teamsURL} statusCode ${clientResponse.statusCode} text: ${body}`
           console.log(err)
           lib.internalError(res, err);
         }
