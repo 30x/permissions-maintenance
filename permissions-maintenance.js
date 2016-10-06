@@ -115,12 +115,14 @@ function addCalculatedProperties(req, permissions) {
 function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
   console.log(`permissions-maintenance:getPermissions:start subject: ${subject}`)
-  ifAllowedThen(req, res, subject, '_permissions', 'read', function(permissions, etag) {
-    addCalculatedProperties(req, permissions)
-    lib.found(req, res, permissions, etag)
-    var hrend = process.hrtime(hrstart)
-    console.log(`permissions-maintenance:getPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-  })
+  db.withPermissionsDo(req, res, subject, function(permissions, etag) {
+    lib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
+      addCalculatedProperties(req, permissions)
+      lib.found(req, res, permissions, etag)
+      var hrend = process.hrtime(hrstart)
+      console.log(`permissions-maintenance:getPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+    })
+  })  
 }
 
 function deletePermissions(req, res, subject) {
