@@ -27,8 +27,6 @@ function verifyPermissions(req, permissions, user) {
   if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
     return '_inheritsPermissionsOf must be an Array'
   var permissionsPermissions = permissions._permissions
-  if (permissionsPermissions === undefined) 
-    permissionsPermissions = permissions._permissions = {}
   if (permissions._inheritsPermissionsOf === undefined) 
     if (permissionsPermissions === undefined || permissionsPermissions.update === undefined) {
       if (permissionsPermissions === undefined) 
@@ -108,7 +106,7 @@ function createPermissions(req, res, permissions) {
 function addCalculatedProperties(req, permissions) {
   var ancestors = permissions._inheritsPermissionsOf
   if (ancestors !== undefined) {
-    permissions._permissions.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`)
+    permissions._metadata.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`)
   }
 }
 
