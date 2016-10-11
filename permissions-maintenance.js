@@ -84,14 +84,16 @@ function createPermissions(req, res, permissions) {
           for (var i=0; i < sharingSets.length; i++) {
             var sharingSet = sharingSets[i]
             var allowedByAll = true
-            lib.withAllowedDo(req, res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
-              allowedByAll = allowedByAll && allowed
-              if (++count == sharingSets.length) {
-                if (allowedByAll)
-                  primCreate(req, res, permissions)
-                else
-                  lib.forbidden(req, res)
-              } 
+            lib.withAllowedDo(req, res, sharingSet, '_permissionsHeirs', 'add', function(statusCode, allowed) {
+              if (statusCode == 200) {
+                allowedByAll = allowedByAll && allowed
+                if (++count == sharingSets.length) 
+                  if (allowedByAll)
+                    primCreate(req, res, permissions)
+                  else
+                    lib.forbidden(req, res)
+              } else
+                lib.internalError(res, statusCode)
             })
           }
         } else
@@ -156,11 +158,14 @@ function updatePermissions(req, res, subject, patch) {
         if (req.headers['if-match'] == etag) { 
           function ifSharingSetsAllowDo(sharingSets, action, callback) {
             if (sharingSets.length > 0)
-              lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(result) {
-                if (result)
-                  callback()
+              lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(statusCode, result) {
+                if (statusCode == 200)
+                  if (result)
+                    callback()
+                  else
+                    lib.forbidden(req, res)
                 else
-                  lib.forbidden(req, res)
+                  lib.internalError(res, statusCode)
               })
             else
               callback()

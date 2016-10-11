@@ -47,7 +47,6 @@ function deletePermissionsThen(req, subject, callback) {
 }
 
 function createPermissionsThen(req, permissions, callback) {
-  lib.internalizeURLs(permissions, req.headers.host);
   var subject = permissions._subject;
   var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', 1, '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
@@ -62,7 +61,6 @@ function createPermissionsThen(req, permissions, callback) {
 }
 
 function updatePermissionsThen(req, subject, patchedPermissions, etag, callback) {
-  lib.internalizeURLs(patchedPermissions, req.headers.host);
   var key = lib.internalizeURL(subject, req.headers.host);
   var query = `UPDATE permissions SET (etag, data) = (${(etag+1) % 2147483647}, '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
   function eventData(pgResult) {
