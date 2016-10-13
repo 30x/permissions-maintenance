@@ -176,20 +176,23 @@ function updatePermissions(req, res, subject, patch) {
             } else {
               if (sharingSets.indexOf(subject) == -1) {
                 var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
-                lib.sendInternalRequest(req, res, path, 'GET', null, function(clientResponse) {
-                  lib.getClientResponseBody(clientResponse, function(body) {
-                    if (clientResponse.statusCode == 200) { 
-                      var result = JSON.parse(body)
-                      if (result.result == true)
-                        callback()
-                      else
-                        lib.badRequest(res, result.reason)
-                    } else {
-                      var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
-                      console.log(err)
-                      lib.internalError(res, err)
-                    }
-                  })
+                lib.sendInternalRequest(req.headers, path, 'GET', null, function(err, clientResponse) {
+                  if (err)
+                    lib.internalError(res, err)
+                  else
+                    lib.getClientResponseBody(clientResponse, function(body) {
+                      if (clientResponse.statusCode == 200) { 
+                        var result = JSON.parse(body)
+                        if (result.result == true)
+                          callback()
+                        else
+                          lib.badRequest(res, result.reason)
+                      } else {
+                        var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
+                        console.log(err)
+                        lib.internalError(res, err)
+                      }
+                    })
                 })
               } else 
                 lib.badRequest(res, 'may not inherit permissions from self')
@@ -267,19 +270,22 @@ function withTeamsDo(req, res, user, callback) {
   if (user !== null) {
     user = lib.internalizeURL(user)
     var teamsURL = `/teams?${user.replace('#', '%23')}`
-    lib.sendInternalRequest(req, res, teamsURL, 'GET', undefined, function (clientResponse) {
-      lib.getClientResponseBody(clientResponse, function(body) {
-        if (clientResponse.statusCode == 200) { 
-          var actors = JSON.parse(body).contents
-          lib.internalizeURLs(actors, req.headers.host)
-          actors.push(user)
-          callback(actors)
-        } else {
-          var err = `withTeamsDo: unable to retrieve ${teamsURL} statusCode ${clientResponse.statusCode} text: ${body}`
-          console.log(err)
-          lib.internalError(res, err)
-        }
-      })
+    lib.sendInternalRequest(req.headers, teamsURL, 'GET', undefined, function (err, clientResponse) {
+      if (err)
+        lib.internalError(res, err)
+      else
+        lib.getClientResponseBody(clientResponse, function(body) {
+          if (clientResponse.statusCode == 200) { 
+            var actors = JSON.parse(body).contents
+            lib.internalizeURLs(actors, req.headers.host)
+            actors.push(user)
+            callback(actors)
+          } else {
+            var err = `withTeamsDo: unable to retrieve ${teamsURL} statusCode ${clientResponse.statusCode} text: ${body}`
+            console.log(err)
+            lib.internalError(res, err)
+          }
+        })
     })
   }
 }
