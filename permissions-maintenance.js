@@ -6,11 +6,12 @@ Please do not add any framework to this preqs. We do not want express or anythin
 Adding simple library prereqs could be OK if the value they bring is in proportion to their size and complexity 
 and is warranted by the difficulty of the problem being solved.
 */
-var http = require('http')
-var url = require('url')
-var querystring = require('querystring')
-var lib = require('http-helper-functions')
-var db = require('./permissions-maintenance-db.js')
+const http = require('http')
+const url = require('url')
+const querystring = require('querystring')
+const lib = require('http-helper-functions')
+const pLib = require('permissions-helper-functions')
+const db = require('./permissions-maintenance-db.js')
 
 var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
 var ANYONE = 'http://apigee.com/users/anyone'
@@ -59,7 +60,7 @@ function calculateSharedWith(req, permissions) {
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
   console.log('permissions-maintenance:createPermissions:start')
-  var user = lib.getUser(req)
+  var user = lib.getUser(req.headers.authorization)
   if (user == null)
     lib.unauthorized(req, res)
   else {
@@ -84,8 +85,10 @@ function createPermissions(req, res, permissions) {
           for (var i=0; i < sharingSets.length; i++) {
             var sharingSet = sharingSets[i]
             var allowedByAll = true
-            lib.withAllowedDo(req, res, sharingSet, '_permissionsHeirs', 'add', function(statusCode, allowed) {
-              if (statusCode == 200) {
+            pLib.withAllowedDo(req.headers, sharingSet, '_permissionsHeirs', 'add', function(err, statusCode, allowed) {
+              if (err)
+                lib.internalError(res, statusCode)
+              else if (statusCode == 200) {
                 allowedByAll = allowedByAll && allowed
                 if (++count == sharingSets.length) 
                   if (allowedByAll)
@@ -116,11 +119,15 @@ function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
   console.log(`permissions-maintenance:getPermissions:start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    lib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
-      addCalculatedProperties(req, permissions)
-      lib.found(req, res, permissions, etag)
-      var hrend = process.hrtime(hrstart)
-      console.log(`permissions-maintenance:getPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+    pLib.ifAllowedThen(req.headers, subject, '_permissions', 'read', function(err, reason) {
+      if (err)
+        lib.internalError(res, reason)
+      else {
+        addCalculatedProperties(req, permissions)
+        lib.found(req, res, permissions, etag)
+        var hrend = process.hrtime(hrstart)
+        console.log(`permissions-maintenance:getPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      }
     })
   })  
 }
@@ -128,13 +135,16 @@ function getPermissions(req, res, subject) {
 function deletePermissions(req, res, subject) {
   var hrstart = process.hrtime()
   console.log(`permissions-maintenance:deletePermissions:start subject: ${subject}`)
-  lib.ifAllowedThen(req, res, subject, '_permissions', 'delete', function() {
-    db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
-      addCalculatedProperties(req, permissions)
-      lib.found(req, res, permissions, etag)
-      var hrend = process.hrtime(hrstart)
-      console.log(`permissions-maintenance:deletePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-    })
+  pLib.ifAllowedThen(req.headers, subject, '_permissions', 'delete', function(err, reason) {
+    if (err)
+      lib.internalError(res, reason)
+    else
+      db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
+        addCalculatedProperties(req, permissions)
+        lib.found(req, res, permissions, etag)
+        var hrend = process.hrtime(hrstart)
+        console.log(`permissions-maintenance:deletePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      })
   })
 }
 
@@ -142,69 +152,74 @@ function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
   console.log('permissions-maintenance:updatePermissions:start')
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    lib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
-      lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
-        function primUpdatePermissions() {
-          calculateSharedWith(req, patchedPermissions)
-          patchedPermissions._metadata.modifier = lib.getUser(req)
-          patchedPermissions._metadata.modified = new Date().toISOString()
-          db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
-            addCalculatedProperties(req, patchedPermissions) 
-            lib.found(req, res, patchedPermissions, etag)
-            var hrend = process.hrtime(hrstart)
-            console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-          })
-        }
-        if (req.headers['if-match'] == etag) { 
-          function ifSharingSetsAllowDo(sharingSets, action, callback) {
-            if (sharingSets.length > 0)
-              lib.withAllowedDo(req, res, sharingSets, '_permissionsHeirs', action, function(statusCode, result) {
-                if (statusCode == 200)
-                  if (result)
-                    callback()
-                  else
-                    lib.forbidden(req, res)
-                else
-                  lib.internalError(res, statusCode)
-              })
-            else
-              callback()
+    pLib.ifAllowedThen(req.headers, subject, '_permissions', 'read', function(err, reason) {
+      if (err)
+        lib.internalError(res, reason)
+      else
+        lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
+          function primUpdatePermissions() {
+            calculateSharedWith(req, patchedPermissions)
+            patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
+            patchedPermissions._metadata.modified = new Date().toISOString()
+            db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
+              addCalculatedProperties(req, patchedPermissions) 
+              lib.found(req, res, patchedPermissions, etag)
+              var hrend = process.hrtime(hrstart)
+              console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+            })
           }
-          function ifAllowedToInheritFromThen(sharingSets, callback) {
-            if (sharingSets === undefined || sharingSets.length == 0) {
-              callback()
-            } else {
-              if (sharingSets.indexOf(subject) == -1) {
-                var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
-                lib.sendInternalRequest(req.headers, path, 'GET', null, function(err, clientResponse) {
+          if (req.headers['if-match'] == etag) { 
+            function ifSharingSetsAllowDo(sharingSets, action, callback) {
+              if (sharingSets.length > 0)
+                pLib.withAllowedDo(req.headers, sharingSets, '_permissionsHeirs', action, function(err, statusCode, result) {
                   if (err)
-                    lib.internalError(res, err)
+                    lib.internalError(statusCode)
+                  else if (statusCode == 200)
+                    if (result)
+                      callback()
+                    else
+                      lib.forbidden(req, res)
                   else
-                    lib.getClientResponseBody(clientResponse, function(body) {
-                      if (clientResponse.statusCode == 200) { 
-                        var result = JSON.parse(body)
-                        if (result.result == true)
-                          callback()
-                        else
-                          lib.badRequest(res, result.reason)
-                      } else {
-                        var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
-                        console.log(err)
-                        lib.internalError(res, err)
-                      }
-                    })
+                    lib.internalError(res, statusCode)
                 })
-              } else 
-                lib.badRequest(res, 'may not inherit permissions from self')
+              else
+                callback()
             }
+            function ifAllowedToInheritFromThen(sharingSets, callback) {
+              if (sharingSets === undefined || sharingSets.length == 0) {
+                callback()
+              } else {
+                if (sharingSets.indexOf(subject) == -1) {
+                  var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
+                  lib.sendInternalRequest(req.headers, path, 'GET', null, function(err, clientResponse) {
+                    if (err)
+                      lib.internalError(res, err)
+                    else
+                      lib.getClientResponseBody(clientResponse, function(body) {
+                        if (clientResponse.statusCode == 200) { 
+                          var result = JSON.parse(body)
+                          if (result.result == true)
+                            callback()
+                          else
+                            lib.badRequest(res, result.reason)
+                        } else {
+                          var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
+                          console.log(err)
+                          lib.internalError(res, err)
+                        }
+                      })
+                  })
+                } else 
+                  lib.badRequest(res, 'may not inherit permissions from self')
+              }
+            }
+            var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
+            ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions)
+          } else {
+            var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
+            lib.badRequest(res, err)
           }
-          var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
-          ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions)
-        } else {
-          var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
-          lib.badRequest(res, err)
-        }
-      })
+        })
     })
   })
 }
@@ -219,10 +234,13 @@ function addUsersWhoCanSee(req, res, permissions, result, callback) {
     var count = 0
     for (let j = 0; j < sharingSets.length; j++) 
       db.withPermissionsDo(req, res, sharingSets[j], function(permissions, etag) {
-        lib.ifAllowedThen(req, res, sharingSets[j], '_permissions', 'read', function() {
-          addUsersWhoCanSee(req, res, permissions, result, function() {
-            if (++count == sharingSets.length) {callback()}
-          })
+        pLib.ifAllowedThen(req.headers, sharingSets[j], '_permissions', 'read', function(err, reason) {
+          if (err)
+            lib.internalError(res, reason)
+          else 
+            addUsersWhoCanSee(req, res, permissions, result, function() {
+              if (++count == sharingSets.length) {callback()}
+            })
         })
       })
   } else
@@ -233,10 +251,13 @@ function getUsersWhoCanSee(req, res, subject) {
   var result = {}
   subject = lib.internalizeURL(subject, req.headers.host)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    lib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
-      addUsersWhoCanSee(req, res, permissions, result, function() {
-        lib.found(req, res, Object.keys(result))
-      })
+    pLib.ifAllowedThen(req.headers, subject, '_permissions', 'read', function(err, reason) {
+      if (err)
+        lib.internalError(res, reason)
+      else 
+        addUsersWhoCanSee(req, res, permissions, result, function() {
+          lib.found(req, res, Object.keys(result))
+        })
     })
   })
 }
@@ -244,7 +265,7 @@ function getUsersWhoCanSee(req, res, subject) {
 function getResourcesSharedWith(req, res, user) {
   var hrstart = process.hrtime()
   console.log(`permissions-maintenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
-  var requestingUser = lib.getUser(req)
+  var requestingUser = lib.getUser(req.headers.authorization)
   user = lib.internalizeURL(user, req.headers.host)
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE))
     withTeamsDo(req, res, user, function(actors) {
@@ -259,10 +280,13 @@ function getResourcesSharedWith(req, res, user) {
 }
 
 function getPermissionsHeirs(req, res, subject) {
-  lib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
-    db.withHeirsDo(req, res, subject, function(heirs) {
-      lib.found(req, res, heirs)
-    })
+  pLib.ifAllowedThen(req.headers, subject, '_self', 'read', function(err, reason) {
+    if (err)
+      lib.internalError(res, reason)
+    else 
+      db.withHeirsDo(req, res, subject, function(heirs) {
+        lib.found(req, res, heirs)
+      })
   })
 }
 
