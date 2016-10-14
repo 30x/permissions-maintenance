@@ -54,7 +54,10 @@ function createPermissionsThen(req, permissions, callback) {
   }
   pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
     if (err) 
-      callback(err) 
+      if (err.code == 23505)
+        callback(409)
+      else
+        callback(err) 
     else 
       callback(err, pgResult.rows[0].etag)
   });

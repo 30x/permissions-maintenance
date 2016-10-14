@@ -6,6 +6,8 @@ function withErrorHandling(req, res, callback) {
   return function (err) {
     if (err == 404) 
       lib.notFound(req, res)
+    else if (err == 409) 
+      lib.duplicate(res, 'permissions already exist for this subject')
     else if (err)
       lib.internalError(res, err)
     else 
