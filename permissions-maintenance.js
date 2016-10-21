@@ -16,7 +16,6 @@ const db = require('./permissions-maintenance-db.js')
 var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
 var ANYONE = 'http://apigee.com/users/anyone'
 var INCOGNITO = 'http://apigee.com/users/incognito'
-var INTERNAL_ROUTER = process.env.INTERNAL_ROUTER
 var SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET
 if (SHIPYARD_PRIVATE_SECRET !== undefined) {
   SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64')
