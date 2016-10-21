@@ -1,11 +1,11 @@
 {
   "name": "permissions-maintenance",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Maintain the permissions database",
   "main": "permissions-maintenance.js",
   "dependencies": {
-    "http-helper-functions": "^0.0.41",
-    "permissions-helper-functions": "0.0.6",
+    "http-helper-functions": "^0.0.43",
+    "permissions-helper-functions": "0.0.8",
     "pg": "^6.0.3",
     "pg-event-producer": "^0.0.20"
   },
