@@ -69,7 +69,7 @@ function createPermissions(req, res, permissions) {
         calculateSharedWith(req, permissions)
         db.createPermissionsThen(req, res, permissions, function(etag) {
           addCalculatedProperties(req, permissions)
-          var permissionsURL =  `//${req.headers.host}/permissions?${permissions._subject}`
+          var permissionsURL =  `scheme://authority/permissions?${permissions._subject}`
           lib.created(req, res, permissions, permissionsURL, etag)
           var hrend = process.hrtime(hrstart)
           console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)

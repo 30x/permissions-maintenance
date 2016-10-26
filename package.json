@@ -4,10 +4,10 @@
   "description": "Maintain the permissions database",
   "main": "permissions-maintenance.js",
   "dependencies": {
-    "http-helper-functions": "0.0.49",
-    "permissions-helper-functions": "0.0.12",
+    "http-helper-functions": "0.0.53",
+    "permissions-helper-functions": "0.0.16",
     "pg": "^6.0.3",
-    "pg-event-producer": "0.0.27"
+    "pg-event-producer": "0.0.30"
   },
   "devDependencies": {},
   "scripts": {
