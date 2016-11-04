@@ -270,7 +270,7 @@ function withTeamsDo(req, res, user, callback) {
 function requestHandler(req, res) {
   if (req.url == '/permissions')
     if (req.method == 'POST')
-      lib.getServerPostObject(req, res, createPermissions)
+      lib.getServerPostObject(req, res, (p) => createPermissions(req, res, p))
     else
       lib.methodNotAllowed(req, res, ['POST'])
   else {
@@ -281,9 +281,7 @@ function requestHandler(req, res) {
       else if (req.method == 'DELETE') 
         deletePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else if (req.method == 'PATCH')  
-        lib.getServerPostObject(req, res, function(req, res, body) {
-          updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body)
-        })
+        lib.getServerPostObject(req, res, (body) => updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
         lib.methodNotAllowed(req, res, ['GET', 'PATCH'])
     else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null)
