@@ -37,7 +37,7 @@ function deletePermissionsThen(req, subject, callback) {
   function eventData(pgResult) {
     return {subject: subject, action: 'delete', etag: pgResult.rows[0].etag}
   }
-  pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       callback(err) 
     else 
@@ -52,7 +52,7 @@ function createPermissionsThen(req, permissions, callback) {
   function eventData(pgResult) {
     return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag}
   }
-  pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       if (err.code == 23505)
         callback(409)
@@ -69,7 +69,7 @@ function updatePermissionsThen(req, subject, patchedPermissions, etag, callback)
   function eventData(pgResult) {
     return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag}
   }
-  pge.queryAndStoreEvent(req, pool, query, 'permissions', eventData, eventProducer, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       callback(err) 
     else 
