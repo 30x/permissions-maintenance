@@ -21,7 +21,7 @@ if (SHIPYARD_PRIVATE_SECRET !== undefined) {
   SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64')
 }
 
-function verifyPermissions(req, permissions, user) {
+function verifyPermissions(req, permissions) {
   if (permissions._subject === undefined) 
     return 'invalid JSON: "_subject" property not set'
   if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
@@ -29,6 +29,7 @@ function verifyPermissions(req, permissions, user) {
   var permissionsPermissions = permissions._permissions
   if (permissions._inheritsPermissionsOf === undefined) 
     if (permissionsPermissions === undefined || permissionsPermissions.update === undefined) {
+      var user = lib.getUser(req.headers.authorization)
       if (permissionsPermissions === undefined) 
         permissionsPermissions = permissions._permissions = {}
       permissionsPermissions.update = [user]
@@ -59,11 +60,8 @@ function calculateSharedWith(req, permissions) {
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
   console.log('permissions-maintenance:createPermissions:start')
-  var user = lib.getUser(req.headers.authorization)
-  if (user == null)
-    lib.unauthorized(req, res)
-  else {
-    var err = verifyPermissions(req, permissions, user)
+  pLib.ifAllowedThen(req, res, '/', 'permissions', 'create', function() {
+    var err = verifyPermissions(req, permissions)
     if (err === null) {
       function primCreate(req, res, permissions) {
         calculateSharedWith(req, permissions)
@@ -99,14 +97,10 @@ function createPermissions(req, res, permissions) {
         primCreate(req, res, permissions)
     } else
       lib.badRequest(res, err)
-  }
+  })
 }
 
 function addCalculatedProperties(req, permissions) {
-  var ancestors = permissions._inheritsPermissionsOf
-  if (ancestors !== undefined) {
-    permissions._metadata.inheritsPermissions = ancestors.map(x => `//${req.headers.host}/permissions?${x}`)
-  }
 }
 
 function getPermissions(req, res, subject) {
@@ -181,7 +175,7 @@ function updatePermissions(req, res, subject, patch) {
           var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
           ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions)
         } else {
-          var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' + JSON.stringify(req.headers) : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
+          var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
           lib.badRequest(res, err)
         }
       })
