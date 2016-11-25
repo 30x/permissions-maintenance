@@ -52,9 +52,11 @@ function calculateSharedWith(req, permissions) {
     }
   }
   var result = {}
-  if (permissions._permissions) listUsers(permissions._permissions, result)
-  if (permissions._self) listUsers(permissions._self, result)
-  permissions._sharedWith = Object.keys(result)
+  if (permissions._permissions) 
+    listUsers(permissions._permissions, result)
+  if (permissions._self) 
+    listUsers(permissions._self, result)
+  permissions._metadata.sharedWith = Object.keys(result)
 }
 
 function createPermissions(req, res, permissions) {
@@ -184,7 +186,7 @@ function updatePermissions(req, res, subject, patch) {
 }
 
 function addUsersWhoCanSee(req, res, permissions, result, callback) {
-  var sharedWith = permissions._sharedWith
+  var sharedWith = permissions._metadata.sharedWith
   if (sharedWith !== undefined)
     for (var i=0; i < sharedWith.length; i++)
       result[sharedWith[i]] = true
