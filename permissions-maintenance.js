@@ -159,10 +159,10 @@ function updatePermissions(req, res, subject, patch) {
                   lib.getClientResponseBody(clientResponse, function(body) {
                     if (clientResponse.statusCode == 200) { 
                       var result = JSON.parse(body)
-                      if (result.result == true)
+                      if (result == true)
                         callback()
                       else
-                        lib.badRequest(res, result.reason)
+                        lib.badRequest(res, `may not inherit from ${sharingSets}`)
                     } else {
                       var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
                       console.log(err)
