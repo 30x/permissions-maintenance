@@ -237,7 +237,52 @@ function getResourcesSharedWith(req, res, user) {
 function getPermissionsHeirs(req, res, subject) {
   pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
     db.withHeirsDo(req, res, subject, function(heirs) {
-      lib.found(req, res, heirs)
+      var body = {
+        kind: "Collection",
+        self: req.url,
+        contents: heirs
+      }
+      lib.found(req, res, body)
+    })
+  })
+}
+
+function getPermissionsHeirsDetails(req, res, subject) {
+  pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
+    db.withHeirsDo(req, res, subject, function(heirs) {
+      var heirsDetails = []
+      var body = {
+        kind: "Collection",
+        self: req.url,
+        contents: heirsDetails
+      }
+      if (heirs.length > 0) {
+        var count = 0
+        for (let i=0; i < heirs.length; i++) {
+          let heir = lib.externalizeURLs(url.resolve(`http://${req.headers.host}${req.url}`, heirs[i]))
+          lib.sendRequest(req, heir, 'GET', null, {}, function(err, clientRes) {
+            if (err) {
+              heirsDetails[i] = {self: heir}
+              if (++count == heirs.length)
+                lib.found(req, res, heirsDetails)
+            } else 
+              lib.getClientResponseBody(clientRes, function (body) {
+                try {
+                  var parsedData = JSON.parse(body);
+                } catch (e) {
+                  console.log(e.message);
+                }
+                if (clientRes.statusCode == 200 && parsedData) 
+                  heirsDetails[i] = parsedData
+                else
+                  heirsDetails[i] = {self: heir}
+              if (++count == heirs.length)
+                lib.found(req, res, heirsDetails)
+              })              
+          })
+        }
+      } else
+        lib.found(req, res, body)
     })
   })
 }
@@ -285,10 +330,15 @@ function requestHandler(req, res) {
         getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         lib.methodNotAllowed(req, res, ['GET'])
-    else  if (req_url.pathname == '/permissions-heirs' && req_url.search !== null)
+    else if (req_url.pathname == '/permissions-heirs' && req_url.search !== null)
       if (req.method == 'GET') 
         getPermissionsHeirs(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
+        lib.methodNotAllowed(req, res, ['GET'])
+    else if (req_url.pathname == '/permissions-heirs-details' && req_url.search !== null)
+      if (req.method == 'GET') {
+        getPermissionsHeirsDetails(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+      } else
         lib.methodNotAllowed(req, res, ['GET'])
     else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
       if (req.method == 'GET')
