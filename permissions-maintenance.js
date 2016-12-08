@@ -247,7 +247,10 @@ function getPermissionsHeirs(req, res, subject) {
   })
 }
 
-function getPermissionsHeirsDetails(req, res, subject) {
+function getPermissionsHeirsDetails(req, res, queryString) {
+  var params = querystring.parse(queryString)
+  var subject = params.resource
+  console.log(`permissions-maintenance:getPermissionsHeirsDetails:start subject: ${subject}`)
   pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
     db.withHeirsDo(req, res, subject, function(heirs) {
       var heirsDetails = []
@@ -335,10 +338,10 @@ function requestHandler(req, res) {
         getPermissionsHeirs(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         lib.methodNotAllowed(req, res, ['GET'])
-    else if (req_url.pathname == '/permissions-heirs-details' && req_url.search !== null)
-      if (req.method == 'GET') {
+    else if (req_url.pathname == '/permissions-heirs-details' && req_url.search !== null) 
+      if (req.method == 'GET') 
         getPermissionsHeirsDetails(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
-      } else
+      else
         lib.methodNotAllowed(req, res, ['GET'])
     else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
       if (req.method == 'GET')
