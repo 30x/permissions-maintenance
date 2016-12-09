@@ -54,3 +54,4 @@ exports.updatePermissionsThen = updatePermissionsThen
 exports.withResourcesSharedWithActorsDo = withResourcesSharedWithActorsDo
 exports.withHeirsDo = withHeirsDo
 exports.init = init
+exports.db = db

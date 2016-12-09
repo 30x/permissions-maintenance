@@ -250,44 +250,66 @@ function getPermissionsHeirs(req, res, subject) {
 function getPermissionsHeirsDetails(req, res, queryString) {
   var params = querystring.parse(queryString)
   var subject = params.resource
+  var properties = params.property ? (Array.isArray(params.property) ? params.property : [params.property]) : []
   console.log(`permissions-maintenance:getPermissionsHeirsDetails:start subject: ${subject}`)
-  pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
-    db.withHeirsDo(req, res, subject, function(heirs) {
-      var heirsDetails = []
-      var body = {
-        kind: "Collection",
-        self: req.url,
-        contents: heirsDetails
-      }
-      if (heirs.length > 0) {
-        var count = 0
-        for (let i=0; i < heirs.length; i++) {
-          let heir = lib.externalizeURLs(url.resolve(`http://${req.headers.host}${req.url}`, heirs[i]))
-          lib.sendRequest(req, heir, 'GET', null, {}, function(err, clientRes) {
-            if (err) {
-              heirsDetails[i] = {self: heir}
-              if (++count == heirs.length)
-                lib.found(req, res, heirsDetails)
-            } else 
-              lib.getClientResponseBody(clientRes, function (body) {
-                try {
-                  var parsedData = JSON.parse(body);
-                } catch (e) {
-                  console.log(e.message);
-                }
-                if (clientRes.statusCode == 200 && parsedData) 
-                  heirsDetails[i] = parsedData
-                else
-                  heirsDetails[i] = {self: heir}
-              if (++count == heirs.length)
-                lib.found(req, res, heirsDetails)
-              })              
-          })
+  if (properties.length == 0)
+    getPermissionsHeirs(req, res, subject)
+  else
+    pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
+      db.withHeirsDo(req, res, subject, function(heirs) {
+        var heirsDetails = []
+        var result = {
+          kind: "Collection",
+          self: req.url,
+          contents: heirsDetails
         }
-      } else
-        lib.found(req, res, body)
+        if (heirs.length > 0) {
+          var includeSharedWith = properties.indexOf('_sharedWith') > -1 || properties.indexOf('_sharedWithCount') > -1
+          var db_count = includeSharedWith ? 0 : heirs.length
+          var http_count = 0
+          for (let i=0; i < heirs.length; i++) {
+            let heir = lib.externalizeURLs(url.resolve(`http://${req.headers.host}${req.url}`, heirs[i]))
+            heirsDetails[i] = properties.length > 0 ? {self: heir} : heir
+            if (includeSharedWith)
+              db.db.withPermissionsDo(req, subject, function(err, permissions) {
+                if (!err) {
+                  if (properties.indexOf('_sharedWith') > -1)
+                    heirsDetails[i]._sharedWith = permissions._metadata.sharedWith
+                  if (properties.indexOf('_sharedWithCount') > -1)
+                    heirsDetails[i]._sharedWithCount = permissions._metadata.sharedWith.length
+                }
+                if (++db_count == heirs.length && http_count == heirs.length)
+                  lib.found(req, res, result)
+              })  
+            if (properties.length > 0)
+              lib.sendRequest(req, heir, 'GET', null, {}, function(err, clientRes) {
+                if (err) {
+                  if (++http_count == heirs.length && db_count == heirs.length)
+                    lib.found(req, res, result)
+                } else 
+                  lib.getClientResponseBody(clientRes, function (body) {
+                    try {
+                      var parsedData = JSON.parse(body);
+                    } catch (e) {
+                      console.log(e.message);
+                    }
+                    if (clientRes.statusCode == 200 && parsedData) { 
+                      var heirsDetail = heirsDetails[i]
+                      for (var j = 0; j < properties.length; j++) {
+                        var property = properties[j]
+                        if (property in parsedData)
+                          heirsDetail[property] = parsedData[property]
+                      }
+                    }
+                    if (++http_count == heirs.length && db_count == heirs.length)
+                      lib.found(req, res, result)
+                  })              
+              })
+          }
+        } else
+          lib.found(req, res, result)
+      })
     })
-  })
 }
 
 function withTeamsDo(req, res, user, callback) {
