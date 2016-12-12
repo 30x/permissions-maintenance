@@ -269,7 +269,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
           var http_count = 0
           for (let i=0; i < heirs.length; i++) {
             let heir = lib.externalizeURLs(url.resolve(`http://${req.headers.host}${req.url}`, heirs[i]))
-            heirsDetails[i] = properties.length > 0 ? {self: heir} : heir
+            heirsDetails[i] = {self: heir}
             if (includeSharedWith)
               db.db.withPermissionsDo(req, subject, function(err, permissions) {
                 if (!err) {
@@ -384,7 +384,7 @@ function start(){
   })
 }
 
- if (process.env.INTERNAL_SY_ROUTER_HOST == 'kubernetes_host_ip') 
+if (process.env.INTERNAL_SY_ROUTER_HOST == 'kubernetes_host_ip') 
   lib.getHostIPThen(function(err, hostIP){
     if (err) 
       process.exit(1)
