@@ -185,32 +185,31 @@ function updatePermissions(req, res, subject, patch) {
   })
 }
 
-function addUsersWhoCanSee(req, res, permissions, result, callback) {
-  var sharedWith = permissions._metadata.sharedWith
-  if (sharedWith !== undefined)
-    for (var i=0; i < sharedWith.length; i++)
-      result[sharedWith[i]] = true
-  var sharingSets = permissions._inheritsPermissionsOf
-  if (sharingSets !== undefined) {
-    var count = 0
-    for (let j = 0; j < sharingSets.length; j++) 
-      db.withPermissionsDo(req, res, sharingSets[j], function(permissions, etag) {
-        pLib.ifAllowedThen(req, res, sharingSets[j], '_permissions', 'read', function() {
-          addUsersWhoCanSee(req, res, permissions, result, function() {
-            if (++count == sharingSets.length) {callback()}
+function getUsersWhoCanAccess(req, res, subject) {
+  function addUsersWhoCanAcess(req, res, permissions, result, callback) {
+    var sharedWith = permissions._metadata.sharedWith
+    if (sharedWith !== undefined)
+      for (var i=0; i < sharedWith.length; i++)
+        result[sharedWith[i]] = true
+    var sharingSets = permissions._inheritsPermissionsOf
+    if (sharingSets !== undefined) {
+      var count = 0
+      for (let j = 0; j < sharingSets.length; j++) 
+        db.withPermissionsDo(req, res, sharingSets[j], function(permissions, etag) {
+          pLib.ifAllowedThen(req, res, sharingSets[j], '_permissions', 'read', function() {
+            addUsersWhoCanAcess(req, res, permissions, result, function() {
+              if (++count == sharingSets.length) {callback()}
+            })
           })
         })
-      })
-  } else
-    callback()
-}
-
-function getUsersWhoCanSee(req, res, subject) {
+    } else
+      callback()
+  }
   var result = {}
   subject = lib.internalizeURL(subject, req.headers.host)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
-      addUsersWhoCanSee(req, res, permissions, result, function() {
+      addUsersWhoCanAcess(req, res, permissions, result, function() {
         lib.found(req, res, Object.keys(result))
       })
     })
@@ -241,17 +240,13 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
     db.withHeirsDo(req, res, resources, function(heirs) {
       if (heirs.length > 0) {
         heirs = heirs.filter(heir => result.indexOf(heir) == -1)
-        for (let i = 0; i < heirs.length; i++) result.push(heirs[i])
+        for (let i = 0; i < heirs.length; i++) 
+          result.push(heirs[i])
         withHeirsRecursive(req, res, heirs, result, function(){
           callback(result)                
-          var hrend = process.hrtime(hrstart)
-          console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
-      } else {
+      } else
         callback(result)
-        var hrend = process.hrtime(hrstart)
-        console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-      }
     })
   }
   pLib.ifAllowedThen(req, res, team, '_self', 'update', function() {
@@ -260,9 +255,14 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
         var result = resources.slice()
         withHeirsRecursive(req, res, resources, result, function(){
           lib.found(req, res, result)
+          var hrend = process.hrtime(hrstart)
+          console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
-      } else
-        lib.found(req, res, resources)        
+      } else {
+        lib.found(req, res, resources)
+        var hrend = process.hrtime(hrstart)
+        console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      }        
     })
   })
 }
@@ -383,7 +383,7 @@ function requestHandler(req, res) {
         lib.getServerPostObject(req, res, (body) => updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
         lib.methodNotAllowed(req, res, ['GET', 'PATCH'])
-    else if (req_url.pathname == '/resources-shared-with-transitively' && req_url.search !== null)
+    else if (req_url.pathname == '/resources-accessible-by-team-members' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWithTeamTransitively(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
@@ -405,7 +405,7 @@ function requestHandler(req, res) {
         lib.methodNotAllowed(req, res, ['GET'])
     else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
       if (req.method == 'GET')
-        getUsersWhoCanSee(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+        getUsersWhoCanAccess(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         lib.methodNotAllowed(req, res, ['GET'])
     else

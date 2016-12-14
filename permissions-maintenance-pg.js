@@ -97,7 +97,6 @@ function withHeirsDo(req, securedObject, callback) {
      AS sharedWith WHERE sharedWith <@ '${JSON.stringify(securedObject)}'`
   else
     query = `SELECT subject, data FROM permissions WHERE data @> '{"_inheritsPermissionsOf":["${securedObject}"]}'`
-  console.log('query:', query)
   pool.query(query, function (err, pgResult) {
     if (err) 
       callback(err) 
