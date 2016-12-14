@@ -234,6 +234,39 @@ function getResourcesSharedWith(req, res, user) {
     lib.forbidden(req, res)
 }
 
+function getResourcesSharedWithTeamTransitively(req, res, team) {
+  var hrstart = process.hrtime()
+  console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:start team: ${team}`)
+  function withHeirsRecursive(req, res, resources, result, callback) {
+    db.withHeirsDo(req, res, resources, function(heirs) {
+      if (heirs.length > 0) {
+        heirs = heirs.filter(heir => result.indexOf(heir) == -1)
+        for (let i = 0; i < heirs.length; i++) result.push(heirs[i])
+        withHeirsRecursive(req, res, heirs, result, function(){
+          callback(result)                
+          var hrend = process.hrtime(hrstart)
+          console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+        })
+      } else {
+        callback(result)
+        var hrend = process.hrtime(hrstart)
+        console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      }
+    })
+  }
+  pLib.ifAllowedThen(req, res, team, '_self', 'update', function() {
+    db.withResourcesSharedWithActorsDo(req, res, [team], function(resources) {
+      if (resources.length > 0) {
+        var result = resources.slice()
+        withHeirsRecursive(req, res, resources, result, function(){
+          lib.found(req, res, result)
+        })
+      } else
+        lib.found(req, res, resources)        
+    })
+  })
+}
+
 function getPermissionsHeirs(req, res, subject) {
   pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
     db.withHeirsDo(req, res, subject, function(heirs) {
@@ -350,6 +383,11 @@ function requestHandler(req, res) {
         lib.getServerPostObject(req, res, (body) => updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
         lib.methodNotAllowed(req, res, ['GET', 'PATCH'])
+    else if (req_url.pathname == '/resources-shared-with-transitively' && req_url.search !== null)
+      if (req.method == 'GET')
+        getResourcesSharedWithTeamTransitively(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
+      else
+        lib.methodNotAllowed(req, res, ['GET'])
     else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
