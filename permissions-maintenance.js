@@ -251,15 +251,21 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
   }
   pLib.ifAllowedThen(req, res, team, '_self', 'update', function() {
     db.withResourcesSharedWithActorsDo(req, res, [team], function(resources) {
+      var envelope = {
+        kind: 'Collection',
+        self: req.url
+      }
       if (resources.length > 0) {
         var result = resources.slice()
         withHeirsRecursive(req, res, resources, result, function(){
-          lib.found(req, res, result)
+          envelope.contents = result
+          lib.found(req, res, envelope)
           var hrend = process.hrtime(hrstart)
           console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
       } else {
-        lib.found(req, res, resources)
+        envelope.contents = resources
+        lib.found(req, res, envelope)
         var hrend = process.hrtime(hrstart)
         console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       }        
