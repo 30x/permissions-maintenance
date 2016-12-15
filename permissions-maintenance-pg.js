@@ -107,13 +107,36 @@ function withHeirsDo(req, securedObject, callback) {
 
 function init(callback) {
   var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag int, data jsonb);'
-  pool.query(query, function(err, pgResult) {
+  pool.connect(function(err, client, release) {
     if(err)
-      console.error('error creating permissions table', err);
-    else {
-      console.log('permissions-maintenance-db: connected to PG, config: ', config);
-      eventProducer.init(callback);
-    }
+      console.error('error creating permissions table', err)
+    else
+      client.query(query, function(err, pgResult) {
+        if(err) {
+          release()
+          console.error('error creating permissions table', err)
+        } else {
+          query = "CREATE INDEX IF NOT EXISTS inxinherits ON permissions USING gin ((data->'_inheritsPermissionsOf'));"
+          client.query(query, function(err, pgResult) {
+            if(err) {
+              release()
+              console.error('error creating inxinherits index', err)
+            } else {
+              query = "CREATE INDEX IF NOT EXISTS inxsharedwith ON permissions USING gin ((data->'_metadata'->'sharedWith'));"
+              client.query(query, function(err, pgResult) {
+                if(err) {
+                  release()
+                  console.error('error creating inxsharedwith index', err)
+                } else {
+                  release()
+                  console.log('permissions-maintenance-db: connected to PG, config: ', config)
+                  eventProducer.init(callback)
+                }
+              })
+            }
+          })
+        }
+      })
   })    
 }
 
