@@ -133,7 +133,7 @@ function deletePermissions(req, res, subject) {
 
 function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
-  console.log('permissions-maintenance:updatePermissions:start')
+  console.log('permissions-maintenance:updatePermissions:start subject:' + subject)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
