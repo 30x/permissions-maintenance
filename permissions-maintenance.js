@@ -21,6 +21,10 @@ if (SHIPYARD_PRIVATE_SECRET !== undefined) {
   SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64')
 }
 
+function log(method, text) {
+  console.log(Date.now(), process.env.COMPONENT, method, text)
+}
+
 function verifyPermissions(req, permissions) {
   if (permissions._subject === undefined) 
     return 'invalid JSON: "_subject" property not set'
@@ -61,7 +65,7 @@ function calculateSharedWith(req, permissions) {
 
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
-  console.log('permissions-maintenance:createPermissions:start')
+  log('createPermissions', 'start')
   pLib.ifAllowedThen(req, res, '/', 'permissions', 'create', function() {
     var err = verifyPermissions(req, permissions)
     if (err === null) {
@@ -72,7 +76,7 @@ function createPermissions(req, res, permissions) {
           var permissionsURL =  `scheme://authority/permissions?${permissions._subject}`
           lib.created(req, res, permissions, permissionsURL, etag)
           var hrend = process.hrtime(hrstart)
-          console.log(`permissions-maintenance:createPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+          log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })        
       }
       var sharingSets = permissions._inheritsPermissionsOf
@@ -107,33 +111,33 @@ function addCalculatedProperties(req, permissions) {
 
 function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
-  console.log(`permissions-maintenance:getPermissions:start subject: ${subject}`)
+  log('getPermissions:', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
       addCalculatedProperties(req, permissions)
       lib.found(req, res, permissions, etag)
       var hrend = process.hrtime(hrstart)
-      console.log(`permissions-maintenance:getPermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      log('getPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
   })  
 }
 
 function deletePermissions(req, res, subject) {
   var hrstart = process.hrtime()
-  console.log(`permissions-maintenance:deletePermissions:start subject: ${subject}`)
+  log('deletePermissions', `start subject: ${subject}`)
   pLib.ifAllowedThen(req, res, subject, '_permissions', 'delete', function() {
     db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
       addCalculatedProperties(req, permissions)
       lib.found(req, res, permissions, etag)
       var hrend = process.hrtime(hrstart)
-      console.log(`permissions-maintenance:deletePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      log('deletePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
   })
 }
 
 function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
-  console.log('permissions-maintenance:updatePermissions:start subject:' + subject)
+  log('updatePermissions', 'start subject:' + subject)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
@@ -145,7 +149,7 @@ function updatePermissions(req, res, subject, patch) {
             addCalculatedProperties(req, patchedPermissions) 
             lib.found(req, res, patchedPermissions, etag)
             var hrend = process.hrtime(hrstart)
-            console.log(`permissions-maintenance:updatePermissions:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+            log('updatePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
           })
         }
         if (req.headers['if-match'] == etag) { 
@@ -165,7 +169,7 @@ function updatePermissions(req, res, subject, patch) {
                         lib.badRequest(res, `may not inherit from ${sharingSets}`)
                     } else {
                       var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
-                      console.log(err)
+                      log('updatePermissions', err)
                       lib.internalError(res, err)
                     }
                   })
@@ -218,7 +222,7 @@ function getUsersWhoCanAccess(req, res, subject) {
 
 function getResourcesSharedWith(req, res, user) {
   var hrstart = process.hrtime()
-  console.log(`permissions-maintenance:getResourcesSharedWith:start user: ${JSON.stringify(user)}`)
+  log('getResourcesSharedWith', `start user: ${JSON.stringify(user)}`)
   var requestingUser = lib.getUser(req.headers.authorization)
   user = lib.internalizeURL(user, req.headers.host)
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE))
@@ -226,7 +230,7 @@ function getResourcesSharedWith(req, res, user) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
         lib.found(req, res, resources)
         var hrend = process.hrtime(hrstart)
-        console.log(`permissions-maintenance:getResourcesSharedWith:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+        log('getResourcesSharedWith', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       })
     })
   else
@@ -235,7 +239,7 @@ function getResourcesSharedWith(req, res, user) {
 
 function getResourcesSharedWithTeamTransitively(req, res, team) {
   var hrstart = process.hrtime()
-  console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:start team: ${team}`)
+  log('getResourcesSharedWithTeamTransitively', `start team: ${team}`)
   function withHeirsRecursive(req, res, resources, result, callback) {
     db.withHeirsDo(req, res, resources, function(heirs) {
       if (heirs.length > 0) {
@@ -261,13 +265,13 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
           envelope.contents = result
           lib.found(req, res, envelope)
           var hrend = process.hrtime(hrstart)
-          console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+          log('getResourcesSharedWithTeamTransitively', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
       } else {
         envelope.contents = resources
         lib.found(req, res, envelope)
         var hrend = process.hrtime(hrstart)
-        console.log(`permissions-maintenance:getResourcesSharedWithTeamTransitively:success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+        log('getResourcesSharedWithTeamTransitively', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       }        
     })
   })
@@ -290,7 +294,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
   var params = querystring.parse(queryString)
   var subject = params.resource
   var properties = params.property ? (Array.isArray(params.property) ? params.property : [params.property]) : []
-  console.log(`permissions-maintenance:getPermissionsHeirsDetails:start subject: ${subject}`)
+  log('getPermissionsHeirsDetails', `start subject: ${subject}`)
   if (properties.length == 0)
     getPermissionsHeirs(req, res, subject)
   else
@@ -330,7 +334,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
                     try {
                       var parsedData = JSON.parse(body);
                     } catch (e) {
-                      console.log(e.message);
+                      log('getPermissionsHeirsDetails', e.message);
                     }
                     if (clientRes.statusCode == 200 && parsedData) { 
                       var heirsDetail = heirsDetails[i]
@@ -364,7 +368,7 @@ function withTeamsDo(req, res, user, callback) {
           callback(actors)
         } else {
           var err = `withTeamsDo: unable to retrieve ${teamsURL} statusCode ${clientResponse.statusCode} text: ${body}`
-          console.log(err)
+          log('withTeamsDo', err)
           lib.internalError(res, err)
         }
       })
@@ -423,7 +427,7 @@ var port = process.env.PORT
 function start(){
   db.init(function(){
     http.createServer(requestHandler).listen(port, function() {
-      console.log(`server is listening on ${port}`)
+      log('start', `server is listening on ${port}`)
     })
   })
 }
