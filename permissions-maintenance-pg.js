@@ -29,7 +29,7 @@ function withPermissionsDo(req, subject, callback) {
         callback(null, row.data, row.etag)
       }
     }
-  });
+  })
 }
 
 function deletePermissionsThen(req, subject, callback) {
