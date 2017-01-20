@@ -31,9 +31,9 @@ function verifyPermissions(req, permissions) {
   if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
     return '_inheritsPermissionsOf must be an Array'
   var permissionsPermissions = permissions._permissions
+  var user = lib.getUser(req.headers.authorization)
   if (permissions._inheritsPermissionsOf === undefined) 
     if (permissionsPermissions === undefined || permissionsPermissions.update === undefined) {
-      var user = lib.getUser(req.headers.authorization)
       if (permissionsPermissions === undefined) 
         permissionsPermissions = permissions._permissions = {}
       permissionsPermissions.update = [user]
