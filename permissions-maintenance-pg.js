@@ -79,8 +79,8 @@ function updatePermissionsThen(req, subject, patchedPermissions, etag, callback)
 
 function withResourcesSharedWithActorsDo(req, actors, callback) {
   actors = actors == null ? [INCOGNITO] : actors.concat([INCOGNITO, ANYONE]);
-  var query = `SELECT DISTINCT subject FROM permissions, jsonb_array_elements(permissions.data#>'{_metadata, sharedWith}')
-               AS sharedWith WHERE sharedWith <@ '${JSON.stringify(actors)}'` // was jsonb_array_elements(permissions.data->'_sharedWith') 
+  var query = `SELECT DISTINCT subject FROM permissions WHERE data#>'{_metadata, sharedWith}' ?| array[${actors.map(x => `'${x}'`).join(',')}]`
+  console.log(query)
   pool.query(query, function (err, pgResult) {
     if (err) 
       callback(err) 
@@ -93,10 +93,9 @@ function withHeirsDo(req, securedObject, callback) {
   if (Array.isArray(securedObject))
   var query
   if (Array.isArray(securedObject))
-    query = `SELECT DISTINCT subject, data FROM permissions, jsonb_array_elements(permissions.data->'_inheritsPermissionsOf')
-     AS sharedWith WHERE sharedWith <@ '${JSON.stringify(securedObject)}'`
+    query = `SELECT DISTINCT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ?| array[${actors.map(x => `'${x}'`).join(',')}]`
   else
-    query = `SELECT subject, data FROM permissions WHERE data @> '{"_inheritsPermissionsOf":["${securedObject}"]}'`
+    query = `SELECT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ? '${securedObject}'`
   pool.query(query, function (err, pgResult) {
     if (err) 
       callback(err) 
