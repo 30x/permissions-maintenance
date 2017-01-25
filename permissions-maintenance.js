@@ -137,9 +137,9 @@ function deletePermissions(req, res, subject) {
 
 function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
-  log('updatePermissions', 'start subject:' + subject)
+  log('updatePermissions', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
+    pLib.ifAllowedThen(req, res, subject, '_permissions', 'update', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
         function primUpdatePermissions() {
           calculateSharedWith(req, patchedPermissions)
