@@ -31,6 +31,10 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
   db.updatePermissionsThen(req, subject, patchedPermissions, etag, withErrorHandling(req, res, callback))
 }
 
+function putPermissionsThen(req, res, subject, permissions, callback) {
+  db.updatePermissionsThen(req, subject, permissions, withErrorHandling(req, res, callback))
+}
+
 function withResourcesSharedWithActorsDo(req, res, actors, callback) {
   db.withResourcesSharedWithActorsDo(req, actors, withErrorHandling(req, res, callback))
 }
@@ -51,6 +55,7 @@ exports.withPermissionsDo = withPermissionsDo
 exports.createPermissionsThen = createPermissionsThen
 exports.deletePermissionsThen = deletePermissionsThen
 exports.updatePermissionsThen = updatePermissionsThen
+exports.putPermissionsThen = putPermissionsThen
 exports.withResourcesSharedWithActorsDo = withResourcesSharedWithActorsDo
 exports.withHeirsDo = withHeirsDo
 exports.init = init

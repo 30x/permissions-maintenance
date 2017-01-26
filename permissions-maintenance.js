@@ -135,6 +135,32 @@ function deletePermissions(req, res, subject) {
   })
 }
 
+function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
+  if (sharingSets === undefined || sharingSets.length == 0) {
+    callback()
+  } else {
+    if (sharingSets.indexOf(subject) == -1) {
+      var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
+      lib.sendInternalRequestThen(req, res, path, 'GET', null, function(clientResponse) {
+        lib.getClientResponseBody(clientResponse, function(body) {
+          if (clientResponse.statusCode == 200) { 
+            var result = JSON.parse(body)
+            if (result == true)
+              callback()
+            else
+              lib.badRequest(res, `may not inherit from ${sharingSets}`)
+          } else {
+            var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
+            log('ifAllowedToInheritFromThen', err)
+            lib.internalError(res, err)
+          }
+        })
+      })
+    } else 
+      lib.badRequest(res, 'may not inherit permissions from self')
+  }
+}
+
 function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
   log('updatePermissions', `start subject: ${subject}`)
@@ -153,39 +179,34 @@ function updatePermissions(req, res, subject, patch) {
           })
         }
         if (req.headers['if-match'] == etag) { 
-          function ifAllowedToInheritFromThen(sharingSets, callback) {
-            if (sharingSets === undefined || sharingSets.length == 0) {
-              callback()
-            } else {
-              if (sharingSets.indexOf(subject) == -1) {
-                var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
-                lib.sendInternalRequestThen(req, res, path, 'GET', null, function(clientResponse) {
-                  lib.getClientResponseBody(clientResponse, function(body) {
-                    if (clientResponse.statusCode == 200) { 
-                      var result = JSON.parse(body)
-                      if (result == true)
-                        callback()
-                      else
-                        lib.badRequest(res, `may not inherit from ${sharingSets}`)
-                    } else {
-                      var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
-                      log('updatePermissions', err)
-                      lib.internalError(res, err)
-                    }
-                  })
-                })
-              } else 
-                lib.badRequest(res, 'may not inherit permissions from self')
-            }
-          }
           var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
-          ifAllowedToInheritFromThen(new_permissions, primUpdatePermissions)
+          ifAllowedToInheritFromThen(req, res, subject, new_permissions, primUpdatePermissions)
         } else {
           var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
           lib.badRequest(res, err)
         }
       })
     })
+  })
+}
+
+function putPermissions(req, res, subject, patch) {
+  var hrstart = process.hrtime()
+  log('putPermissions', `start subject: ${subject}`)
+  pLib.ifAllowedThen(req, res, subject, '_permissions', 'put', function() {
+    function primPutPermissions() {
+      calculateSharedWith(req, patchedPermissions)
+      patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
+      patchedPermissions._metadata.modified = new Date().toISOString()
+      db.putPermissionsThen(req, res, subject, patchedPermissions, function(etag) {
+        addCalculatedProperties(req, patchedPermissions) 
+        lib.found(req, res, patchedPermissions, etag)
+        var hrend = process.hrtime(hrstart)
+        log('putPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+      })
+    }
+    var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
+    ifAllowedToInheritFromThen(req, res, subject, new_permissions, primPutPermissions)
   })
 }
 
@@ -391,8 +412,10 @@ function requestHandler(req, res) {
         deletePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else if (req.method == 'PATCH')  
         lib.getServerPostObject(req, res, (body) => updatePermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
+      else if (req.method == 'PUT')  
+        lib.getServerPostObject(req, res, (body) => putPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
-        lib.methodNotAllowed(req, res, ['GET', 'PATCH'])
+        lib.methodNotAllowed(req, res, ['GET', 'PATCH', 'PUT'])
     else if (req_url.pathname == '/resources-accessible-by-team-members' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWithTeamTransitively(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))

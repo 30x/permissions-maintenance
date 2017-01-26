@@ -1,23 +1,23 @@
 'use strict';
-var Pool = require('pg').Pool;
-var lib = require('http-helper-functions');
-var pge = require('pg-event-producer');
+const Pool = require('pg').Pool;
+const lib = require('http-helper-functions');
+const pge = require('pg-event-producer');
 
-var ANYONE = 'http://apigee.com/users/anyone';
-var INCOGNITO = 'http://apigee.com/users/incognito';
+const ANYONE = 'http://apigee.com/users/anyone';
+const INCOGNITO = 'http://apigee.com/users/incognito';
 
-var config = {
+const config = {
   host: process.env.PG_HOST,
   user: process.env.PG_USER,
   password: process.env.PG_PASSWORD,
   database: process.env.PG_DATABASE
-};
+}
 
-var pool = new Pool(config);
-var eventProducer = new pge.eventProducer(pool);
+const pool = new Pool(config);
+const eventProducer = new pge.eventProducer(pool);
 
 function withPermissionsDo(req, subject, callback) {
-  var query = 'SELECT etag, data FROM permissions WHERE subject = $1';
+  const query = 'SELECT etag, data FROM permissions WHERE subject = $1';
   pool.query(query,[subject], function (err, pgResult) {
     if (err)
       callback(err)
@@ -48,7 +48,8 @@ function deletePermissionsThen(req, subject, callback) {
 
 function createPermissionsThen(req, permissions, callback) {
   var subject = permissions._subject;
-  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', 1, '${JSON.stringify(permissions)}') RETURNING etag`;
+  var newEtag = lib.uuid4()
+  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', '${newEtag}', '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
     return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag}
   }
@@ -60,12 +61,13 @@ function createPermissionsThen(req, permissions, callback) {
         callback(err) 
     else 
       callback(err, pgResult.rows[0].etag)
-  });
+  })
 }
 
 function updatePermissionsThen(req, subject, patchedPermissions, etag, callback) {
+  var newEtag = lib.uuid4()
   var key = lib.internalizeURL(subject, req.headers.host);
-  var query = `UPDATE permissions SET (etag, data) = (${(etag+1) % 2147483647}, '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = ${etag} RETURNING etag`;
+  var query = `UPDATE permissions SET (etag, data) = ('${newEtag}', '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = '${etag}' RETURNING etag`;
   function eventData(pgResult) {
     return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag}
   }
@@ -73,7 +75,22 @@ function updatePermissionsThen(req, subject, patchedPermissions, etag, callback)
     if (err) 
       callback(err) 
     else 
-      callback(err, pgResult.rows[0].etag);
+      callback(err, pgResult.rows[0].etag)
+  })
+}
+
+function putPermissionsThen(req, subject, ermissions, callback) {
+  var newEtag = lib.uuid4()
+  var key = lib.internalizeURL(subject, req.headers.host);
+  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', '${newEtag}', '${JSON.stringify(permissions)}') ON CONFLICT (subject) DO UPDATE SET data = EXCLUDED.data, etag = EXCLUDED.etag RETURNING etag`;
+  function eventData(pgResult) {
+    return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag}
+  }
+  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
+    if (err) 
+      callback(err) 
+    else 
+      callback(err, pgResult.rows[0].etag)
   })
 }
 
@@ -105,7 +122,7 @@ function withHeirsDo(req, securedObject, callback) {
 }
 
 function init(callback) {
-  var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag int, data jsonb);'
+  var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag text, data jsonb);'
   pool.connect(function(err, client, release) {
     if(err)
       console.error('error creating permissions table', err)
@@ -143,6 +160,7 @@ exports.withPermissionsDo = withPermissionsDo
 exports.createPermissionsThen = createPermissionsThen
 exports.deletePermissionsThen = deletePermissionsThen
 exports.updatePermissionsThen = updatePermissionsThen
+exports.putPermissionsThen = putPermissionsThen
 exports.withResourcesSharedWithActorsDo = withResourcesSharedWithActorsDo
 exports.withHeirsDo = withHeirsDo
 exports.init = init
