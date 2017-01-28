@@ -79,12 +79,12 @@ function updatePermissionsThen(req, subject, patchedPermissions, etag, callback)
   })
 }
 
-function putPermissionsThen(req, subject, ermissions, callback) {
+function putPermissionsThen(req, subject, permissions, callback) {
   var newEtag = lib.uuid4()
   var key = lib.internalizeURL(subject, req.headers.host);
-  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', '${newEtag}', '${JSON.stringify(permissions)}') ON CONFLICT (subject) DO UPDATE SET data = EXCLUDED.data, etag = EXCLUDED.etag RETURNING etag`;
+  var query = `UPDATE permissions SET (etag, data) = ('${newEtag}', '${JSON.stringify(permissions)}') WHERE subject = '${key}' RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag}
+    return {subject: permissions._subject, action: 'update', etag: pgResult.rows[0].etag}
   }
   eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 

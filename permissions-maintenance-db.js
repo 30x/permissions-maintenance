@@ -7,7 +7,7 @@ function withErrorHandling(req, res, callback) {
     if (err == 404) 
       lib.notFound(req, res)
     else if (err == 409) 
-      lib.duplicate(res, 'permissions already exist for this subject')
+      lib.duplicate(res, 'permissions-maintenance-db: permissions already exist for this subject')
     else if (err)
       lib.internalError(res, err)
     else 
@@ -32,7 +32,7 @@ function updatePermissionsThen(req, res, subject, patchedPermissions, etag, call
 }
 
 function putPermissionsThen(req, res, subject, permissions, callback) {
-  db.updatePermissionsThen(req, subject, permissions, withErrorHandling(req, res, callback))
+  db.putPermissionsThen(req, subject, permissions, withErrorHandling(req, res, callback))
 }
 
 function withResourcesSharedWithActorsDo(req, res, actors, callback) {
