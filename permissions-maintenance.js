@@ -30,15 +30,14 @@ function verifyPermissions(req, res, permissions, callback) {
     return 'invalid JSON: "_subject" property not set'
   if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
     return '_inheritsPermissionsOf must be an Array'
-  var permissionsPermissions = permissions._permissions
+  var permissionsSelf = permissions._self
   var user = lib.getUser(req.headers.authorization)
   if (permissions._inheritsPermissionsOf === undefined) 
-    if (permissionsPermissions === undefined || permissionsPermissions.update === undefined) {
-      if (permissionsPermissions === undefined) 
-        permissionsPermissions = permissions._permissions = {}
-      permissionsPermissions.update = [user]
-      permissionsPermissions.read = permissionsPermissions.read || [user]
-    }
+    if (permissionsSelf === undefined || permissionsSelf.govern === undefined)
+      lib.badRequest(res, `permissions for ${permissions._subject} must specify inheritance or at least one governor`)
+    else
+      if (permissionsSelf.admin === undefined)
+        permissionsSelf.admin = permissionsSelf.govern
   permissions._metadata = {}
   var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
   if (rslt)
@@ -80,8 +79,6 @@ function calculateSharedWith(req, permissions) {
     }
   }
   var result = {}
-  if (permissions._permissions) 
-    listUsers(permissions._permissions, result)
   if (permissions._self) 
     listUsers(permissions._self, result)
   permissions._metadata.sharedWith = Object.keys(result)
@@ -110,7 +107,7 @@ function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
   log('getPermissions:', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
+    pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
       addCalculatedProperties(req, permissions)
       lib.found(req, res, permissions, etag)
       var hrend = process.hrtime(hrstart)
@@ -122,7 +119,7 @@ function getPermissions(req, res, subject) {
 function deletePermissions(req, res, subject) {
   var hrstart = process.hrtime()
   log('deletePermissions', `start subject: ${subject}`)
-  pLib.ifAllowedThen(req, res, subject, '_permissions', 'delete', function() {
+  pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
     db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
       addCalculatedProperties(req, permissions)
       lib.found(req, res, permissions, etag)
@@ -162,7 +159,7 @@ function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
   log('updatePermissions', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_permissions', 'update', function() {
+    pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
         function primUpdatePermissions() {
           patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
@@ -190,7 +187,7 @@ function updatePermissions(req, res, subject, patch) {
 function putPermissions(req, res, subject, permissions) {
   var hrstart = process.hrtime()
   log('putPermissions', `start subject: ${subject}`)
-  pLib.ifAllowedThen(req, res, subject, '_permissions', 'put', function() {
+  pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
     function primPutPermissions() {
       calculateSharedWith(req, permissions)
       permissions._metadata.modifier = lib.getUser(req.headers.authorization)
@@ -220,7 +217,7 @@ function getUsersWhoCanAccess(req, res, subject) {
       var count = 0
       for (let j = 0; j < sharingSets.length; j++) 
         db.withPermissionsDo(req, res, sharingSets[j], function(permissions, etag) {
-          pLib.ifAllowedThen(req, res, sharingSets[j], '_permissions', 'read', function() {
+          pLib.ifAllowedThen(req, res, sharingSets[j], '_self', 'admin', function() {
             addUsersWhoCanAcess(req, res, permissions, result, function() {
               if (++count == sharingSets.length) {callback()}
             })
@@ -232,7 +229,7 @@ function getUsersWhoCanAccess(req, res, subject) {
   var result = {}
   subject = lib.internalizeURL(subject, req.headers.host)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_permissions', 'read', function() {
+    pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
       addUsersWhoCanAcess(req, res, permissions, result, function() {
         lib.found(req, res, Object.keys(result))
       })
