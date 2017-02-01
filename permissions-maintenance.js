@@ -135,7 +135,7 @@ function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
   } else {
     if (sharingSets.indexOf(subject) == -1) {
       var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
-      lib.sendInternalRequestThen(req, res, path, 'GET', null, function(clientResponse) {
+      lib.sendInternalRequestThen(res, 'GET', path, lib.flowThroughHeaders(req), null, function(clientResponse) {
         lib.getClientResponseBody(clientResponse, function(body) {
           if (clientResponse.statusCode == 200) { 
             var result = JSON.parse(body)
@@ -376,7 +376,7 @@ function withTeamsDo(req, res, user, callback) {
   if (user !== null) {
     user = lib.internalizeURL(user)
     var teamsURL = `/teams?${user.replace('#', '%23')}`
-    lib.sendInternalRequestThen(req, res, teamsURL, 'GET', undefined, function (clientResponse) {
+    lib.sendInternalRequestThen(res, 'GET', teamsURL, lib.flowThroughHeaders(req), undefined, function (clientResponse) {
       lib.getClientResponseBody(clientResponse, function(body) {
         if (clientResponse.statusCode == 200) { 
           var actors = JSON.parse(body).contents
