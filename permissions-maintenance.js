@@ -90,7 +90,8 @@ function createPermissions(req, res, permissions) {
   log('createPermissions', 'start')
   function primCreate(req, res, permissions) {
     db.createPermissionsThen(req, res, permissions, function(etag) {
-      var permissionsURL =  `/permissions?${permissions._subject}`
+      var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
+      console.log('permissionsURL', permissionsURL)
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
