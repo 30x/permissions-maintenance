@@ -23,7 +23,7 @@ if (SHIPYARD_PRIVATE_SECRET !== undefined) {
 }
 
 function log(method, text) {
-  console.log(Date.now(), process.env.COMPONENT, method, text)
+  console.log(Date.now(), process.env.COMPONENT_NAME, method, text)
 }
 
 function verifyPermissions(req, res, permissions, callback) {
