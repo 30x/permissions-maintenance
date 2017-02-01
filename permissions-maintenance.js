@@ -11,6 +11,7 @@ const url = require('url')
 const querystring = require('querystring')
 const lib = require('http-helper-functions')
 const pLib = require('permissions-helper-functions')
+const rLib = require('response-helper-functions')
 const db = require('./permissions-maintenance-db.js')
 
 var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
@@ -34,14 +35,14 @@ function verifyPermissions(req, res, permissions, callback) {
   var user = lib.getUser(req.headers.authorization)
   if (permissions._inheritsPermissionsOf === undefined) 
     if (permissionsSelf === undefined || permissionsSelf.govern === undefined)
-      lib.badRequest(res, `permissions for ${permissions._subject} must specify inheritance or at least one governor`)
+      rLib.badRequest(res, `permissions for ${permissions._subject} must specify inheritance or at least one governor`)
     else
       if (permissionsSelf.admin === undefined)
         permissionsSelf.admin = permissionsSelf.govern
   permissions._metadata = {}
   var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
   if (rslt)
-    return lib.badRequest(res, rslt)
+    return rLib.badRequest(res, rslt)
   calculateSharedWith(req, permissions)
   addCalculatedProperties(req, permissions)
 
@@ -60,11 +61,11 @@ function verifyPermissions(req, res, permissions, callback) {
             if (allowedByAll)
               callback()
             else
-              lib.forbidden(req, res)
+              rLib.forbidden(res, `user ${user} is not allowed to inherit permissions from ${sharingSets}`)
         })
       }
     } else
-      lib.badRequest(res, `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`)
+      rLib.badRequest(res, `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`)
   } else
     callback()
 }
@@ -89,8 +90,8 @@ function createPermissions(req, res, permissions) {
   log('createPermissions', 'start')
   function primCreate(req, res, permissions) {
     db.createPermissionsThen(req, res, permissions, function(etag) {
-      var permissionsURL =  `scheme://authority/permissions?${permissions._subject}`
-      lib.created(req, res, permissions, permissionsURL, etag)
+      var permissionsURL =  `/permissions?${permissions._subject}`
+      rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })        
@@ -109,7 +110,7 @@ function getPermissions(req, res, subject) {
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
       addCalculatedProperties(req, permissions)
-      lib.found(req, res, permissions, etag)
+      rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
       var hrend = process.hrtime(hrstart)
       log('getPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
@@ -122,7 +123,7 @@ function deletePermissions(req, res, subject) {
   pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
     db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
       addCalculatedProperties(req, permissions)
-      lib.found(req, res, permissions, etag)
+      rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
       var hrend = process.hrtime(hrstart)
       log('deletePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
@@ -142,16 +143,16 @@ function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
             if (result == true)
               callback()
             else
-              lib.badRequest(res, `may not inherit from ${sharingSets}`)
+              rLib.badRequest(res, `may not inherit from ${sharingSets}`)
           } else {
             var err = `ifAllowedToInheritFromThen: unable to retrieve ${path} statusCode ${clientResponse.statusCode} text: ${body}`
             log('ifAllowedToInheritFromThen', err)
-            lib.internalError(res, err)
+            rLib.internalError(res, err)
           }
         })
       })
     } else 
-      lib.badRequest(res, 'may not inherit permissions from self')
+      rLib.badRequest(res, 'may not inherit permissions from self')
   }
 }
 
@@ -165,7 +166,7 @@ function updatePermissions(req, res, subject, patch) {
           patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
           patchedPermissions._metadata.modified = new Date().toISOString()
           db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
-            lib.found(req, res, patchedPermissions, etag)
+            rLib.found(res, patchedPermissions, req.headers.accept, `/permissins?${subject}`, etag)
             var hrend = process.hrtime(hrstart)
             log('updatePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
           })
@@ -177,7 +178,7 @@ function updatePermissions(req, res, subject, patch) {
           })
         } else {
           var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
-          lib.badRequest(res, err)
+          rLib.badRequest(res, err)
         }
       })
     })
@@ -194,7 +195,7 @@ function putPermissions(req, res, subject, permissions) {
       permissions._metadata.modified = new Date().toISOString()
       db.putPermissionsThen(req, res, subject, permissions, function(etag) {
         addCalculatedProperties(req, permissions) 
-        lib.found(req, res, permissions, etag)
+        rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
         var hrend = process.hrtime(hrstart)
         log('putPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       })
@@ -231,7 +232,7 @@ function getUsersWhoCanAccess(req, res, subject) {
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
       addUsersWhoCanAcess(req, res, permissions, result, function() {
-        lib.found(req, res, Object.keys(result))
+        rLib.found(res, Object.keys(result), req.headers.accept, req.url)
       })
     })
   })
@@ -245,13 +246,13 @@ function getResourcesSharedWith(req, res, user) {
   if (user == requestingUser || user == INCOGNITO || (requestingUser !== null && user == ANYONE))
     withTeamsDo(req, res, user, function(actors) {
       db.withResourcesSharedWithActorsDo(req, res, actors, function(resources) {
-        lib.found(req, res, resources)
+        rLib.found(res, resources, req.headers.accept, req.url)
         var hrend = process.hrtime(hrstart)
         log('getResourcesSharedWith', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       })
     })
   else
-    lib.forbidden(req, res)
+    rLib.forbidden(res, `user ${user} may not access ${req.url}`)
 }
 
 function getResourcesSharedWithTeamTransitively(req, res, team) {
@@ -280,13 +281,13 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
         var result = resources.slice()
         withHeirsRecursive(req, res, resources, result, function(){
           envelope.contents = result
-          lib.found(req, res, envelope)
+          lrLibib.found(res, envelope, req.headers.accept, req.url)
           var hrend = process.hrtime(hrstart)
           log('getResourcesSharedWithTeamTransitively', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
       } else {
         envelope.contents = resources
-        lib.found(req, res, envelope)
+        lirLibb.found(res, envelope, req.headers.accept, req.url)
         var hrend = process.hrtime(hrstart)
         log('getResourcesSharedWithTeamTransitively', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
       }        
@@ -302,7 +303,7 @@ function getPermissionsHeirs(req, res, subject) {
         self: req.url,
         contents: heirs
       }
-      lib.found(req, res, body)
+      rLib.found(res, body, req.headers.accept, req.url)
     })
   })
 }
@@ -339,13 +340,13 @@ function getPermissionsHeirsDetails(req, res, queryString) {
                     heirsDetails[i]._sharedWithCount = permissions._metadata.sharedWith.length
                 }
                 if (++db_count == heirs.length && http_count == heirs.length)
-                  lib.found(req, res, result)
+                  rLib.found(res, result, req.headers.accept, req.url)
               })  
             if (properties.length > 0)
               lib.sendRequest(req, heir, 'GET', null, {}, function(err, clientRes) {
                 if (err) {
                   if (++http_count == heirs.length && db_count == heirs.length)
-                    lib.found(req, res, result)
+                    rLib.found(res, result, req.headers.accept, req.url)
                 } else 
                   lib.getClientResponseBody(clientRes, function (body) {
                     try {
@@ -362,12 +363,12 @@ function getPermissionsHeirsDetails(req, res, queryString) {
                       }
                     }
                     if (++http_count == heirs.length && db_count == heirs.length)
-                      lib.found(req, res, result)
+                      rLib.found(res, result, req.headers.accept, req.url)
                   })              
               })
           }
         } else
-          lib.found(req, res, result)
+          rLib.found(res, result, req.headers.accept, req.url)
       })
     })
 }
@@ -386,7 +387,7 @@ function withTeamsDo(req, res, user, callback) {
         } else {
           var err = `withTeamsDo: unable to retrieve ${teamsURL} statusCode ${clientResponse.statusCode} text: ${body}`
           log('withTeamsDo', err)
-          lib.internalError(res, err)
+          rLib.internalError(res, err)
         }
       })
     })
@@ -398,7 +399,7 @@ function requestHandler(req, res) {
     if (req.method == 'POST')
       lib.getServerPostObject(req, res, (p) => createPermissions(req, res, p))
     else
-      lib.methodNotAllowed(req, res, ['POST'])
+      rLib.methodNotAllowed(res, ['POST'])
   else {
     var req_url = url.parse(req.url)
     if (req_url.pathname == '/permissions' && req_url.search !== null)
@@ -411,34 +412,34 @@ function requestHandler(req, res) {
       else if (req.method == 'PUT')  
         lib.getServerPostObject(req, res, (body) => putPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
-        lib.methodNotAllowed(req, res, ['GET', 'PATCH', 'PUT'])
+        rLib.methodNotAllowed(res, ['GET', 'PATCH', 'PUT'])
     else if (req_url.pathname == '/resources-accessible-by-team-members' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWithTeamTransitively(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
-        lib.methodNotAllowed(req, res, ['GET'])
+        rLib.methodNotAllowed(res, ['GET'])
     else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
-        lib.methodNotAllowed(req, res, ['GET'])
+        rLib.methodNotAllowed(res, ['GET'])
     else if (req_url.pathname == '/permissions-heirs' && req_url.search !== null)
       if (req.method == 'GET') 
         getPermissionsHeirs(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
-        lib.methodNotAllowed(req, res, ['GET'])
+        rLib.methodNotAllowed(res, ['GET'])
     else if (req_url.pathname == '/permissions-heirs-details' && req_url.search !== null) 
       if (req.method == 'GET') 
         getPermissionsHeirsDetails(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
-        lib.methodNotAllowed(req, res, ['GET'])
+        rLib.methodNotAllowed(res, ['GET'])
     else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
       if (req.method == 'GET')
         getUsersWhoCanAccess(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
-        lib.methodNotAllowed(req, res, ['GET'])
+        rLib.methodNotAllowed(res, ['GET'])
     else
-      lib.notFound(req, res)
+      rLib.notFound(res, `//${req.headers.host}${req.url} not found`)
   }
 }
 

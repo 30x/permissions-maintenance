@@ -1,15 +1,16 @@
 'use strict'
 const lib = require('http-helper-functions')
+const rLib = require('response-helper-functions')
 const db = require('./permissions-maintenance-pg.js')
 
 function withErrorHandling(req, res, callback) {
   return function (err) {
     if (err == 404) 
-      lib.notFound(req, res)
+      rLib.notFound(res, `//${req.headers.host}${req.url} not found`)
     else if (err == 409) 
-      lib.duplicate(res, 'permissions-maintenance-db: permissions already exist for this subject')
+      rLib.duplicate(res, 'permissions-maintenance-db: permissions already exist for this subject')
     else if (err)
-      lib.internalError(res, err)
+      rLib.internalError(res, err)
     else 
       callback.apply(this, Array.prototype.slice.call(arguments, 1))
   }

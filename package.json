@@ -7,7 +7,8 @@
     "http-helper-functions": "0.0.82",
     "permissions-helper-functions": "0.0.36",
     "pg": "^6.0.3",
-    "pg-event-producer": "0.0.36"
+    "pg-event-producer": "0.0.36",
+    "response-helper-functions": "0.0.1"
   },
   "devDependencies": {},
   "scripts": {
