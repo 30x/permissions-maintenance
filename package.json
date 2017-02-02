@@ -5,7 +5,7 @@
   "main": "permissions-maintenance.js",
   "dependencies": {
     "http-helper-functions": "0.0.83",
-    "permissions-helper-functions": "0.0.38",
+    "permissions-helper-functions": "0.0.39",
     "pg": "^6.0.3",
     "pg-event-producer": "0.0.36",
     "response-helper-functions": "0.0.4"
