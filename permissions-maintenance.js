@@ -55,7 +55,7 @@ function verifyPermissions(req, res, permissions, callback) {
       for (var i=0; i < sharingSets.length; i++) {
         var sharingSet = sharingSets[i]
         var allowedByAll = true
-        pLib.withAllowedDo(req, res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
+        pLib.withAllowedDo(lib.flowThroughHeaders(req), res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
           allowedByAll = allowedByAll && allowed
           if (++count == sharingSets.length) 
             if (allowedByAll)
@@ -91,13 +91,12 @@ function createPermissions(req, res, permissions) {
   function primCreate(req, res, permissions) {
     db.createPermissionsThen(req, res, permissions, function(etag) {
       var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
-      console.log('permissionsURL', permissionsURL)
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })        
   }
-  pLib.ifAllowedThen(req, res, '/', 'permissions', 'create', function() {
+  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, '/', 'permissions', 'create', function() {
     verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions))
   })
 }
@@ -109,7 +108,7 @@ function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
   log('getPermissions:', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
+    pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'admin', function() {
       addCalculatedProperties(req, permissions)
       rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
       var hrend = process.hrtime(hrstart)
@@ -121,7 +120,7 @@ function getPermissions(req, res, subject) {
 function deletePermissions(req, res, subject) {
   var hrstart = process.hrtime()
   log('deletePermissions', `start subject: ${subject}`)
-  pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
+  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
     db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
       addCalculatedProperties(req, permissions)
       rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
@@ -161,7 +160,7 @@ function updatePermissions(req, res, subject, patch) {
   var hrstart = process.hrtime()
   log('updatePermissions', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
+    pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
         function primUpdatePermissions() {
           patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
@@ -189,7 +188,7 @@ function updatePermissions(req, res, subject, patch) {
 function putPermissions(req, res, subject, permissions) {
   var hrstart = process.hrtime()
   log('putPermissions', `start subject: ${subject}`)
-  pLib.ifAllowedThen(req, res, subject, '_self', 'govern', function() {
+  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
     function primPutPermissions() {
       calculateSharedWith(req, permissions)
       permissions._metadata.modifier = lib.getUser(req.headers.authorization)
@@ -219,7 +218,7 @@ function getUsersWhoCanAccess(req, res, subject) {
       var count = 0
       for (let j = 0; j < sharingSets.length; j++) 
         db.withPermissionsDo(req, res, sharingSets[j], function(permissions, etag) {
-          pLib.ifAllowedThen(req, res, sharingSets[j], '_self', 'admin', function() {
+          pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, sharingSets[j], '_self', 'admin', function() {
             addUsersWhoCanAcess(req, res, permissions, result, function() {
               if (++count == sharingSets.length) {callback()}
             })
@@ -231,7 +230,7 @@ function getUsersWhoCanAccess(req, res, subject) {
   var result = {}
   subject = lib.internalizeURL(subject, req.headers.host)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
-    pLib.ifAllowedThen(req, res, subject, '_self', 'admin', function() {
+    pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'admin', function() {
       addUsersWhoCanAcess(req, res, permissions, result, function() {
         rLib.found(res, Object.keys(result), req.headers.accept, req.url)
       })
@@ -272,7 +271,7 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
         callback(result)
     })
   }
-  pLib.ifAllowedThen(req, res, team, '_self', 'update', function() {
+  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, team, '_self', 'update', function() {
     db.withResourcesSharedWithActorsDo(req, res, [team], function(resources) {
       var envelope = {
         kind: 'Collection',
@@ -297,7 +296,7 @@ function getResourcesSharedWithTeamTransitively(req, res, team) {
 }
 
 function getPermissionsHeirs(req, res, subject) {
-  pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
+  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'read', function() {
     db.withHeirsDo(req, res, subject, function(heirs) {
       var body = {
         kind: "Collection",
@@ -317,7 +316,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
   if (properties.length == 0)
     getPermissionsHeirs(req, res, subject)
   else
-    pLib.ifAllowedThen(req, res, subject, '_self', 'read', function() {
+    pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'read', function() {
       db.withHeirsDo(req, res, subject, function(heirs) {
         var heirsDetails = []
         var result = {
