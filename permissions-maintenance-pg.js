@@ -43,7 +43,6 @@ function deletePermissionsThen(req, subject, callback) {
     else 
       callback(err, pgResult.rows[0].data, pgResult.rows[0].etag)
   });
-
 }
 
 function createPermissionsThen(req, permissions, callback) {

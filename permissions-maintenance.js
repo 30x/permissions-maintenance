@@ -343,7 +343,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
                   rLib.found(res, result, req.headers.accept, req.url)
               })  
             if (properties.length > 0)
-              lib.sendRequest(req, heir, 'GET', null, {}, function(err, clientRes) {
+              lib.sendInternalRequest('GET', heirs[i], lib.flowThroughHeaders(req), null, function(err, clientRes) {
                 if (err) {
                   if (++http_count == heirs.length && db_count == heirs.length)
                     rLib.found(res, result, req.headers.accept, req.url)
