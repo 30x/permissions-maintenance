@@ -91,6 +91,7 @@ function createPermissions(req, res, permissions) {
   function primCreate(req, res, permissions, scopes) {
     db.createPermissionsThen(req, res, permissions, scopes, function(etag) {
       var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
+      permissions.scopes = scopes
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
@@ -100,7 +101,6 @@ function createPermissions(req, res, permissions) {
     var ancestors = permissions._inheritsPermissionsOf
     if (ancestors)
       ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
-        console.log('\n\nancestors', ancestors, 'scopes', scopes, '\n\n')
         verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, scopes))
       })
     else
