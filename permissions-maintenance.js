@@ -89,7 +89,7 @@ function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
   log('createPermissions', 'start')
   function primCreate(req, res, permissions) {
-    db.createPermissionsThen(req, res, permissions, function(etag) {
+    db.createPermissionsThen(req, res, permissions, [], function(etag) {
       var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
@@ -97,7 +97,7 @@ function createPermissions(req, res, permissions) {
     })        
   }
   pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, '/', 'permissions', 'create', function() {
-    verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions))
+    verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, null))
   })
 }
 
@@ -140,8 +140,8 @@ function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
         lib.getClientResponseBody(clientResponse, function(body) {
           if (clientResponse.statusCode == 200) { 
             var result = JSON.parse(body)
-            if (result == true)
-              callback()
+            if (result.allowed == true)
+              callback(result.scopes)
             else
               rLib.badRequest(res, `may not inherit from ${sharingSets}`)
           } else {
@@ -162,19 +162,19 @@ function updatePermissions(req, res, subject, patch) {
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
       lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
-        function primUpdatePermissions() {
-          patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
-          patchedPermissions._metadata.modified = new Date().toISOString()
-          db.updatePermissionsThen(req, res, subject, patchedPermissions, etag, function(etag) {
-            rLib.found(res, patchedPermissions, req.headers.accept, `/permissins?${subject}`, etag)
-            var hrend = process.hrtime(hrstart)
-            log('updatePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-          })
-        }
         if (req.headers['if-match'] == etag) { 
           var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
-          ifAllowedToInheritFromThen(req, res, subject, new_permissions, function() {
-            verifyPermissions(req, res, patchedPermissions, primUpdatePermissions)
+          ifAllowedToInheritFromThen(req, res, subject, new_permissions, function(scopes) {
+            console.log('scopes', scopes)
+            verifyPermissions(req, res, patchedPermissions, function() {
+              patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
+              patchedPermissions._metadata.modified = new Date().toISOString()
+              db.updatePermissionsThen(req, res, subject, patchedPermissions, scopes, etag, function(etag) {
+                rLib.found(res, patchedPermissions, req.headers.accept, `/permissins?${subject}`, etag)
+                var hrend = process.hrtime(hrstart)
+                log('updatePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+              })
+            })
           })
         } else {
           var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
@@ -189,20 +189,19 @@ function putPermissions(req, res, subject, permissions) {
   var hrstart = process.hrtime()
   log('putPermissions', `start subject: ${subject}`)
   pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
-    function primPutPermissions() {
-      calculateSharedWith(req, permissions)
-      permissions._metadata.modifier = lib.getUser(req.headers.authorization)
-      permissions._metadata.modified = new Date().toISOString()
-      db.putPermissionsThen(req, res, subject, permissions, function(etag) {
-        addCalculatedProperties(req, permissions) 
-        rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
-        var hrend = process.hrtime(hrstart)
-        log('putPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
-      })
-    }
     var new_permissions = '_inheritsPermissionsOf' in permissions ? permissions._inheritsPermissionsOf : []
-    ifAllowedToInheritFromThen(req, res, subject, new_permissions, function() {
-      verifyPermissions(req, res, permissions, primPutPermissions)
+    ifAllowedToInheritFromThen(req, res, subject, new_permissions, function(scopes) {
+      verifyPermissions(req, res, permissions, function () {
+        calculateSharedWith(req, permissions)
+        permissions._metadata.modifier = lib.getUser(req.headers.authorization)
+        permissions._metadata.modified = new Date().toISOString()
+        db.putPermissionsThen(req, res, subject, permissions, scopes, function(etag) {
+          addCalculatedProperties(req, permissions) 
+          rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
+          var hrend = process.hrtime(hrstart)
+          log('putPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
+        })
+      })
     })
   })
 }

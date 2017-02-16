@@ -24,16 +24,16 @@ function deletePermissionsThen(req, res, subject, callback) {
   db.deletePermissionsThen(req, subject, withErrorHandling(req, res, callback))
 }
 
-function createPermissionsThen(req, res, permissions, callback) {
-  db.createPermissionsThen(req, permissions, withErrorHandling(req, res, callback))
+function createPermissionsThen(req, res, permissions, scopes, callback) {
+  db.createPermissionsThen(req, permissions, scopes, withErrorHandling(req, res, callback))
 }
 
-function updatePermissionsThen(req, res, subject, patchedPermissions, etag, callback) {
-  db.updatePermissionsThen(req, subject, patchedPermissions, etag, withErrorHandling(req, res, callback))
+function updatePermissionsThen(req, res, subject, patchedPermissions, scopes, etag, callback) {
+  db.updatePermissionsThen(req, subject, patchedPermissions, scopes, etag, withErrorHandling(req, res, callback))
 }
 
-function putPermissionsThen(req, res, subject, permissions, callback) {
-  db.putPermissionsThen(req, subject, permissions, withErrorHandling(req, res, callback))
+function putPermissionsThen(req, res, subject, permissions, scopes, callback) {
+  db.putPermissionsThen(req, subject, permissions, scopes, withErrorHandling(req, res, callback))
 }
 
 function withResourcesSharedWithActorsDo(req, res, actors, callback) {
