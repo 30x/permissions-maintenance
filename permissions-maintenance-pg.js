@@ -50,7 +50,7 @@ function createPermissionsThen(req, permissions, scopes, callback) {
   var newEtag = lib.uuid4()
   var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', '${newEtag}', '${JSON.stringify(permissions)}') RETURNING etag`;
   function eventData(pgResult) {
-    return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag}
+    return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag, scopes: scopes}
   }
   eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 

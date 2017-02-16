@@ -88,8 +88,8 @@ function calculateSharedWith(req, permissions) {
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
   log('createPermissions', 'start')
-  function primCreate(req, res, permissions) {
-    db.createPermissionsThen(req, res, permissions, [], function(etag) {
+  function primCreate(req, res, permissions, scopes) {
+    db.createPermissionsThen(req, res, permissions, scopes, function(etag) {
       var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
@@ -97,7 +97,14 @@ function createPermissions(req, res, permissions) {
     })        
   }
   pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, '/', 'permissions', 'create', function() {
-    verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, null))
+    var ancestors = permissions._inheritsPermissionsOf
+    if (ancestors)
+      ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
+        console.log('\n\nancestors', ancestors, 'scopes', scopes, '\n\n')
+        verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, scopes))
+      })
+    else
+      verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, []))      
   })
 }
 
@@ -131,11 +138,14 @@ function deletePermissions(req, res, subject) {
 }
 
 function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
-  if (sharingSets === undefined || sharingSets.length == 0) {
-    callback()
-  } else {
-    if (sharingSets.indexOf(subject) == -1) {
-      var path = `/is-allowed-to-inherit-from?${sharingSets.map(x => `sharingSet=${x}`).join('&')}&subject=${subject}`
+  if (sharingSets.indexOf(subject) > -1)
+    rLib.badRequest(res, 'may not inherit permissions from self')
+  else {
+    var queryParams = sharingSets.map(x => `sharingSet=${x}`)
+    if (subject)
+      queryParams.push(`subject=${subject}`)
+    if (queryParams.length > 0) {
+      var path = `/is-allowed-to-inherit-from?${queryParams.join('&')}`
       lib.sendInternalRequestThen(res, 'GET', path, lib.flowThroughHeaders(req), null, function(clientResponse) {
         lib.getClientResponseBody(clientResponse, function(body) {
           if (clientResponse.statusCode == 200) { 
@@ -151,8 +161,8 @@ function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
           }
         })
       })
-    } else 
-      rLib.badRequest(res, 'may not inherit permissions from self')
+    } else
+      callback([])
   }
 }
 
@@ -165,7 +175,6 @@ function updatePermissions(req, res, subject, patch) {
         if (req.headers['if-match'] == etag) { 
           var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
           ifAllowedToInheritFromThen(req, res, subject, new_permissions, function(scopes) {
-            console.log('scopes', scopes)
             verifyPermissions(req, res, patchedPermissions, function() {
               patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
               patchedPermissions._metadata.modified = new Date().toISOString()
@@ -189,8 +198,8 @@ function putPermissions(req, res, subject, permissions) {
   var hrstart = process.hrtime()
   log('putPermissions', `start subject: ${subject}`)
   pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
-    var new_permissions = '_inheritsPermissionsOf' in permissions ? permissions._inheritsPermissionsOf : []
-    ifAllowedToInheritFromThen(req, res, subject, new_permissions, function(scopes) {
+    var new_ancestors = '_inheritsPermissionsOf' in permissions ? permissions._inheritsPermissionsOf : []
+    ifAllowedToInheritFromThen(req, res, subject, new_ancestors, function(scopes) {
       verifyPermissions(req, res, permissions, function () {
         calculateSharedWith(req, permissions)
         permissions._metadata.modifier = lib.getUser(req.headers.authorization)
