@@ -87,7 +87,7 @@ function calculateSharedWith(req, permissions) {
 
 function createPermissions(req, res, permissions) {
   var hrstart = process.hrtime()
-  log('createPermissions', 'start')
+  log('createPermissions', `start subject: ${permissions._subject}`)
   function primCreate(req, res, permissions, scopes) {
     db.createPermissionsThen(req, res, permissions, scopes, function(etag) {
       var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
