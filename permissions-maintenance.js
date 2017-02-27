@@ -113,6 +113,7 @@ function addCalculatedProperties(req, permissions) {
 
 function getPermissions(req, res, subject) {
   var hrstart = process.hrtime()
+  subject = lib.internalizeURL(subject)
   log('getPermissions:', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'admin', function() {
