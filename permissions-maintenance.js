@@ -260,7 +260,7 @@ function getResourcesSharedWith(req, res, user) {
       })
     })
   else
-    rLib.forbidden(res, `user ${user} may not access ${req.url}`)
+    rLib.forbidden(res, `user ${requestingUser} may not access ${req.url} (user:${user})`)
 }
 
 function getResourcesSharedWithTeamTransitively(req, res, team) {
