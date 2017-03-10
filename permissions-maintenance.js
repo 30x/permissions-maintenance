@@ -452,13 +452,28 @@ function requestHandler(req, res) {
   }
 }
 
+function init(callback) {
+  db.init(callback)
+}
+
 var port = process.env.PORT
-function start(){
-  db.init(function(){
+function run(){
+  init(function(){
     http.createServer(requestHandler).listen(port, function() {
       log('start', `server is listening on ${port}`)
     })
   })
+}
+
+function start() {
+if (require.main === module) 
+  run()
+else
+  module.exports = {
+    requestHandler:requestHandler,
+    paths: ['/permissions', '/resources-accessible-by-team-members', '/resources-shared-with', '/permissions-heirs', '/permissions-heirs-details', '/users-who-can-access'],
+    init: init
+  }
 }
 
 if (process.env.INTERNAL_SY_ROUTER_HOST == 'kubernetes_host_ip') 
@@ -472,3 +487,4 @@ if (process.env.INTERNAL_SY_ROUTER_HOST == 'kubernetes_host_ip')
   })
 else 
   start()
+    
