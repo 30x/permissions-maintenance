@@ -44,8 +44,8 @@ function withHeirsDo(req, res, securedObject, callback) {
   db.withHeirsDo(req, securedObject, withErrorHandling(req, res, callback))
 }
 
-function init(callback) {
-  db.init(callback)    
+function init(callback, aPool) {
+  db.init(callback, aPool)    
 }
 
 process.on('unhandledRejection', function(e) {

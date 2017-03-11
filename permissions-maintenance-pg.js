@@ -13,8 +13,8 @@ const config = {
   database: process.env.PG_DATABASE
 }
 
-const pool = new Pool(config);
-const eventProducer = new pge.eventProducer(pool);
+var pool
+var eventProducer
 
 function withPermissionsDo(req, subject, callback) {
   const query = 'SELECT etag, data FROM permissions WHERE subject = $1';
@@ -120,7 +120,9 @@ function withHeirsDo(req, securedObject, callback) {
   })
 }
 
-function init(callback) {
+function init(callback, aPool) {
+  pool = aPool || new Pool(config)
+  eventProducer = new pge.eventProducer(pool)
   var query = 'CREATE TABLE IF NOT EXISTS permissions (subject text primary key, etag text, data jsonb);'
   pool.connect(function(err, client, release) {
     if(err)
