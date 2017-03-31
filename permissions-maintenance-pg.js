@@ -2,6 +2,7 @@
 const Pool = require('pg').Pool;
 const lib = require('http-helper-functions');
 const pge = require('pg-event-producer');
+const randomBytes = require('crypto').randomBytes
 
 const ANYONE = 'http://apigee.com/users/anyone';
 const INCOGNITO = 'http://apigee.com/users/incognito';
@@ -16,8 +17,18 @@ const config = {
 var pool
 var eventProducer
 
+const letters16 = 'abcdefghijklmnopqrst'
+function generateDelimiter() {
+  var buf = randomBytes(4), rslt = ''
+  for (var i = 0; i < 4; i++) {
+    rslt += letters16[buf[i] >>> 4]
+    rslt += letters16[buf[i] & 0xf]
+  }
+  return rslt
+}
+
 function withPermissionsDo(req, subject, callback) {
-  const query = 'SELECT etag, data FROM permissions WHERE subject = $1';
+  const query = 'SELECT etag, data FROM permissions WHERE subject = $1'
   pool.query(query,[subject], function (err, pgResult) {
     if (err)
       callback(err)
@@ -33,11 +44,11 @@ function withPermissionsDo(req, subject, callback) {
 }
 
 function deletePermissionsThen(req, subject, callback) {
-  var query = `DELETE FROM permissions WHERE subject = '${subject}' RETURNING *`;
+  var query = 'DELETE FROM permissions WHERE subject = $1 RETURNING *'
   function eventData(pgResult) {
     return {subject: subject, action: 'delete', etag: pgResult.rows[0].etag}
   }
-  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, [subject], 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       callback(err) 
     else 
@@ -48,11 +59,11 @@ function deletePermissionsThen(req, subject, callback) {
 function createPermissionsThen(req, permissions, scopes, callback) {
   var subject = permissions._subject;
   var newEtag = lib.uuid4()
-  var query = `INSERT INTO permissions (subject, etag, data) values('${subject}', '${newEtag}', '${JSON.stringify(permissions)}') RETURNING etag`;
+  var query = 'INSERT INTO permissions (subject, etag, data) values($1, $2, $3) RETURNING etag'
   function eventData(pgResult) {
     return {subject: permissions._subject, action: 'create', etag: pgResult.rows[0].etag, scopes: scopes}
   }
-  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, [subject, newEtag, JSON.stringify(permissions)], 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       if (err.code == 23505)
         callback(409)
@@ -66,11 +77,12 @@ function createPermissionsThen(req, permissions, scopes, callback) {
 function updatePermissionsThen(req, subject, patchedPermissions, scopes, etag, callback) {
   var newEtag = lib.uuid4()
   var key = lib.internalizeURL(subject, req.headers.host);
-  var query = `UPDATE permissions SET (etag, data) = ('${newEtag}', '${JSON.stringify(patchedPermissions)}') WHERE subject = '${key}' AND etag = '${etag}' RETURNING etag`;
+  var query = 'UPDATE permissions SET (etag, data) = ($1, $2) WHERE subject = $3 AND etag = $4 RETURNING etag'
+  var args = [newEtag, JSON.stringify(patchedPermissions), key, etag]
   function eventData(pgResult) {
     return {subject: patchedPermissions._subject, action: 'update', etag: pgResult.rows[0].etag, scopes: scopes}
   }
-  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, args, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       callback(err) 
     else 
@@ -81,11 +93,12 @@ function updatePermissionsThen(req, subject, patchedPermissions, scopes, etag, c
 function putPermissionsThen(req, subject, permissions, scopes, callback) {
   var newEtag = lib.uuid4()
   var key = lib.internalizeURL(subject, req.headers.host);
-  var query = `UPDATE permissions SET (etag, data) = ('${newEtag}', '${JSON.stringify(permissions)}') WHERE subject = '${key}' RETURNING etag`;
+  var query = 'UPDATE permissions SET (etag, data) = ($1, $2) WHERE subject = $3 RETURNING etag'
+  var args = [newEtag, JSON.stringify(permissions), key]
   function eventData(pgResult) {
     return {subject: permissions._subject, action: 'update', etag: pgResult.rows[0].etag, scopes: scopes}
   }
-  eventProducer.queryAndStoreEvent(req, query, 'permissions', eventData, function(err, pgResult, pgEventResult) {
+  eventProducer.queryAndStoreEvent(req, query, args, 'permissions', eventData, function(err, pgResult, pgEventResult) {
     if (err) 
       callback(err) 
     else 
@@ -95,7 +108,9 @@ function putPermissionsThen(req, subject, permissions, scopes, callback) {
 
 function withResourcesSharedWithActorsDo(req, actors, callback) {
   actors = actors == null ? [INCOGNITO] : actors.concat([INCOGNITO, ANYONE]);
-  var query = `SELECT DISTINCT subject FROM permissions WHERE data#>'{_metadata, sharedWith}' ?| array[${actors.map(x => `'${x}'`).join(',')}]`
+  const delim = generateDelimiter()
+  var query = `SELECT DISTINCT subject FROM permissions WHERE data#>'{_metadata, sharedWith}' ?| array[${actors.map(x => `$${delim}$${x}$${delim}$`).join(',')}]`
+  console.log(query)
   console.log(query)
   pool.query(query, function (err, pgResult) {
     if (err) 
@@ -106,13 +121,15 @@ function withResourcesSharedWithActorsDo(req, actors, callback) {
 }
 
 function withHeirsDo(req, securedObject, callback) {
+  const delim = generateDelimiter()
+  var query, args
   if (Array.isArray(securedObject))
-  var query
-  if (Array.isArray(securedObject))
-    query = `SELECT DISTINCT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ?| array[${actors.map(x => `'${x}'`).join(',')}]`
-  else
-    query = `SELECT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ? '${securedObject}'`
-  pool.query(query, function (err, pgResult) {
+    query = `SELECT DISTINCT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ?| array[${actors.map(x => `$${delim}$${x}$${delim}$`).join(',')}]`
+  else {
+    query = "SELECT subject, data FROM permissions WHERE data->'_inheritsPermissionsOf' ? $1"
+    args = [securedObject]
+  }
+  pool.query(query, args, function (err, pgResult) {
     if (err) 
       callback(err) 
     else 
