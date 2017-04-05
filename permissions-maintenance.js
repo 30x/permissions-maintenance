@@ -71,17 +71,14 @@ function verifyPermissions(req, res, permissions, callback) {
 }
 
 function calculateSharedWith(req, permissions) {
-  function listUsers (obj, result) {
-    for (var operation in obj) {
-      var actors = obj[operation]
+  var result = {}
+  if (permissions._self) 
+    for (var operation in permissions._self) {
+      var actors = permissions._self[operation]
       if (actors !== undefined)
         for (var j = 0; j < actors.length; j++) 
           result[actors[j]] = true
     }
-  }
-  var result = {}
-  if (permissions._self) 
-    listUsers(permissions._self, result)
   permissions._metadata.sharedWith = Object.keys(result)
 }
 
@@ -97,15 +94,21 @@ function createPermissions(req, res, permissions) {
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })        
   }
-  pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, '/', 'permissions', 'create', function() {
-    var ancestors = permissions._inheritsPermissionsOf
-    if (ancestors)
-      ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
-        verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, scopes))
-      })
-    else
-      verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, []))      
-  })
+  if (req.headers['x-client-authorization']) {
+    var flowThroughHeaders = {authorization: req.headers['x-client-authorization']}
+    if (req.headers.host)
+      flowThroughHeaders.host = req.headers.host
+    pLib.ifAllowedThen(flowThroughHeaders, res, '/', 'permissions', 'create', function() {
+      var ancestors = permissions._inheritsPermissionsOf
+      if (ancestors)
+        ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
+          verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, scopes))
+        })
+      else
+        verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, []))      
+    })
+  } else
+    rLib.forbidden(res, {msg: 'valid token required in x-client-authorization header to create permissions'})
 }
 
 function addCalculatedProperties(req, permissions) {
