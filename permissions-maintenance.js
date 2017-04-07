@@ -30,7 +30,10 @@ function verifyPermissions(req, res, permissions, callback) {
   if (permissions._subject === undefined) 
     return 'invalid JSON: "_subject" property not set'
   if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
-    return '_inheritsPermissionsOf must be an Array'
+    if (typeof permissions._inheritsPermissionsOf == 'string')
+      permissions._inheritsPermissionsOf = [permissions._inheritsPermissionsOf]
+    else
+      return '_inheritsPermissionsOf must be a string or array'
   var permissionsSelf = permissions._self
   var user = lib.getUser(req.headers.authorization)
   if (permissions._inheritsPermissionsOf === undefined) 
@@ -71,14 +74,17 @@ function verifyPermissions(req, res, permissions, callback) {
 }
 
 function calculateSharedWith(req, permissions) {
-  var result = {}
-  if (permissions._self) 
-    for (var operation in permissions._self) {
-      var actors = permissions._self[operation]
+  function listUsers (obj, result) {
+    for (var operation in obj) {
+      var actors = obj[operation]
       if (actors !== undefined)
         for (var j = 0; j < actors.length; j++) 
           result[actors[j]] = true
     }
+  }
+  var result = {}
+  if (permissions._self) 
+    listUsers(permissions._self, result)
   permissions._metadata.sharedWith = Object.keys(result)
 }
 
@@ -94,11 +100,10 @@ function createPermissions(req, res, permissions) {
       log('createPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })        
   }
+  var headers = lib.flowThroughHeaders(req)
   if (req.headers['x-client-authorization']) {
-    var flowThroughHeaders = {authorization: req.headers['x-client-authorization']}
-    if (req.headers.host)
-      flowThroughHeaders.host = req.headers.host
-    pLib.ifAllowedThen(flowThroughHeaders, res, '/', 'permissions', 'create', function() {
+    headers.authorization = req.headers['x-client-authorization']
+    pLib.ifAllowedThen(headers, res, '/', 'permissions', 'create', function() {
       var ancestors = permissions._inheritsPermissionsOf
       if (ancestors)
         ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
@@ -108,7 +113,7 @@ function createPermissions(req, res, permissions) {
         verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, []))      
     })
   } else
-    rLib.forbidden(res, {msg: 'valid token required in x-client-authorization header to create permissions'})
+    rLib.unauthorized(res, {msg: 'must provide x-client-authorization header to create permissions'})
 }
 
 function addCalculatedProperties(req, permissions) {
