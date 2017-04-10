@@ -50,27 +50,33 @@ function verifyPermissions(req, res, permissions, callback) {
   addCalculatedProperties(req, permissions)
 
   var sharingSets = permissions._inheritsPermissionsOf
-  if (sharingSets !== undefined && sharingSets.length > 0) {
-    sharingSets = sharingSets.map(x => lib.internalizeURL(x))
-    var subject = lib.internalizeURL(permissions._subject)
-    if (sharingSets.indexOf(subject) == -1) {
-      var count = 0
-      for (var i=0; i < sharingSets.length; i++) {
-        var sharingSet = sharingSets[i]
-        var allowedByAll = true
-        pLib.withAllowedDo(lib.flowThroughHeaders(req), res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
-          allowedByAll = allowedByAll && allowed
-          if (++count == sharingSets.length) 
-            if (allowedByAll)
-              callback()
-            else
-              rLib.forbidden(res, `user ${user} is not allowed to inherit permissions from ${sharingSets}`)
-        })
-      }
+  if (sharingSets !== undefined && !Array.isArray(sharingSets))
+      permissions._inheritsPermissionsOf = sharingSets = [sharingSets]
+  console.log(sharingSets)
+  if (sharingSet !== undefined && sharingSet.filter(ss => typeof ss != 'string').length > 0)
+    rLib.badRequest(res, {msg: `values of _inheritsPermissionsOf must be strings`, body: permissions._inheritsPermissionsOf})
+  else
+    if (sharingSets !== undefined && sharingSets.length > 0) {
+      sharingSets = sharingSets.map(x => lib.internalizeURL(x))
+      var subject = lib.internalizeURL(permissions._subject)
+      if (sharingSets.indexOf(subject) == -1) {
+        var count = 0
+        for (var i=0; i < sharingSets.length; i++) {
+          var sharingSet = sharingSets[i]
+          var allowedByAll = true
+          pLib.withAllowedDo(lib.flowThroughHeaders(req), res, sharingSet, '_permissionsHeirs', 'add', function(allowed) {
+            allowedByAll = allowedByAll && allowed
+            if (++count == sharingSets.length) 
+              if (allowedByAll)
+                callback()
+              else
+                rLib.forbidden(res, `user ${user} is not allowed to inherit permissions from ${sharingSets}`)
+          })
+        }
+      } else
+        rLib.badRequest(res, `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`)
     } else
-      rLib.badRequest(res, `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`)
-  } else
-    callback()
+      callback()
 }
 
 function calculateSharedWith(req, permissions) {
@@ -104,13 +110,15 @@ function createPermissions(req, res, permissions) {
   if (req.headers['x-client-authorization']) {
     headers.authorization = req.headers['x-client-authorization']
     pLib.ifAllowedThen(headers, res, '/', 'permissions', 'create', function() {
-      var ancestors = permissions._inheritsPermissionsOf
-      if (ancestors)
-        ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
-          verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, scopes))
-        })
-      else
-        verifyPermissions(req, res, permissions, () => primCreate(req, res, permissions, []))      
+      verifyPermissions(req, res, permissions, () => {
+        var ancestors = permissions._inheritsPermissionsOf
+        if (ancestors)
+          ifAllowedToInheritFromThen(req, res, null, ancestors, function(scopes) {
+            primCreate(req, res, permissions, scopes)
+          })
+        else
+          primCreate(req, res, permissions, [])
+      })
     })
   } else
     rLib.unauthorized(res, {msg: 'must provide x-client-authorization header to create permissions'})
