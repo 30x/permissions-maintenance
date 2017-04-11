@@ -52,7 +52,6 @@ function verifyPermissions(req, res, permissions, callback) {
   var sharingSets = permissions._inheritsPermissionsOf
   if (sharingSets !== undefined && !Array.isArray(sharingSets))
       permissions._inheritsPermissionsOf = sharingSets = [sharingSets]
-  console.log(sharingSets)
   if (sharingSet !== undefined && sharingSet.filter(ss => typeof ss != 'string').length > 0)
     rLib.badRequest(res, {msg: `values of _inheritsPermissionsOf must be strings`, body: permissions._inheritsPermissionsOf})
   else
