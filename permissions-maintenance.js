@@ -1,8 +1,8 @@
 'use strict'
 /* 
-We dislike prerequisites and avoid them where possible. We especially dislike prereqs that have a 'framework' style; 
-simple libraries are more palatable.
-Please do not add any framework to this preqs. We do not want express or anything like it. We do not want any sort of "ORM" or similar.
+We dislike prerequisites and avoid them where possible. 
+We especially dislike prereqs that have a 'framework' style; simple libraries are more palatable.
+Please do not add any framework to the preqs. We do not want express or anything like it. We do not want any sort of "ORM" or similar.
 Adding simple library prereqs could be OK if the value they bring is in proportion to their size and complexity 
 and is warranted by the difficulty of the problem being solved.
 */
@@ -58,8 +58,27 @@ function verifySharingSets(req, res, permissions, callback) {
   }
 }
 
-function verifyPrincipals(req, res, permissions, callback) {
+function verifyPrincipals(req, res, principals, callback) {
   callback()
+}
+
+function verifyPropertyPrincipals(req, res, permissions, callback) {
+  var allPrincipals = []
+  for (let propertyName in permissions)
+    if (!propertyName.startsWith('_') || propertyName == '_self') {
+      let propertyPermissions = permissions[propertyName]
+      if (typeof propertyPermissions == 'object')
+        for (let actionName in propertyPermissions) {
+          let principals = propertyPermissions[actionName]
+          if (Array.isArray(principals))
+            for (let i = 0; i<principals.length; i++)
+              allPrincipals.push(principals[i])
+        }
+    }
+  if (allPrincipals.length == 0)
+    callback()
+  else 
+    verifyPrincipals(req, res, allPrincipals, callback)
 }
 
 function verifyPermissions(req, res, permissions, callback) {
@@ -80,7 +99,7 @@ function verifyPermissions(req, res, permissions, callback) {
     else
       if (permissionsSelf.admin === undefined)
         permissionsSelf.admin = permissionsSelf.govern
-  verifyPrincipals(req, res, permissions, function() {
+  verifyPropertyPrincipals(req, res, permissions, function() {
     verifySharingSets(req, res, permissions, function () {
       permissions._metadata = {}
       var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
