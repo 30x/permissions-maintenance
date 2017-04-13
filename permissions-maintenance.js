@@ -26,36 +26,16 @@ function log(method, text) {
   console.log(Date.now(), process.env.COMPONENT_NAME, method, text)
 }
 
-function verifyPermissions(req, res, permissions, callback) {
-  if (permissions._subject === undefined) 
-    return 'invalid JSON: "_subject" property not set'
-  if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
-    if (typeof permissions._inheritsPermissionsOf == 'string')
-      permissions._inheritsPermissionsOf = [permissions._inheritsPermissionsOf]
-    else
-      return '_inheritsPermissionsOf must be a string or array'
-  var permissionsSelf = permissions._self
-  var user = lib.getUser(req.headers.authorization)
-  if (permissions._inheritsPermissionsOf === undefined) 
-    if (permissionsSelf === undefined || permissionsSelf.govern === undefined)
-      rLib.badRequest(res, `permissions for ${permissions._subject} must specify inheritance or at least one governor`)
-    else
-      if (permissionsSelf.admin === undefined)
-        permissionsSelf.admin = permissionsSelf.govern
-  permissions._metadata = {}
-  var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
-  if (rslt)
-    return rLib.badRequest(res, rslt)
-  calculateSharedWith(req, permissions)
-  addCalculatedProperties(req, permissions)
-
+function verifySharingSets(req, res, permissions, callback) {
   var sharingSets = permissions._inheritsPermissionsOf
-  if (sharingSets !== undefined && !Array.isArray(sharingSets))
+  if (sharingSets == undefined || (Array.isArray(sharingSets) && sharingSets.length == 0))
+    callback()
+  else {
+    if (!Array.isArray(sharingSets))
       permissions._inheritsPermissionsOf = sharingSets = [sharingSets]
-  if (sharingSet !== undefined && sharingSet.filter(ss => typeof ss != 'string').length > 0)
-    rLib.badRequest(res, {msg: `values of _inheritsPermissionsOf must be strings`, body: permissions._inheritsPermissionsOf})
-  else
-    if (sharingSets !== undefined && sharingSets.length > 0) {
+    if (sharingSets.filter(ss => typeof ss != 'string').length > 0)
+      rLib.badRequest(res, {msg: `values of _inheritsPermissionsOf must be URL strings`, body: permissions._inheritsPermissionsOf})
+    else {
       sharingSets = sharingSets.map(x => lib.internalizeURL(x))
       var subject = lib.internalizeURL(permissions._subject)
       if (sharingSets.indexOf(subject) == -1) {
@@ -69,13 +49,50 @@ function verifyPermissions(req, res, permissions, callback) {
               if (allowedByAll)
                 callback()
               else
-                rLib.forbidden(res, `user ${user} is not allowed to inherit permissions from ${sharingSets}`)
+                rLib.forbidden(res, {msg: `user ${user} is not allowed to inherit permissions from ${sharingSets}`})
           })
         }
       } else
-        rLib.badRequest(res, `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`)
-    } else
-      callback()
+        rLib.badRequest(res, {msg: `cannot inherit from self: ${subject} inheritsFrom: ${sharingSets}`})
+    }
+  }
+}
+
+function verifyPrincipals(req, res, permissions, callback) {
+  callback()
+}
+
+function verifyPermissions(req, res, permissions, callback) {
+  if (permissions._subject === undefined) 
+    return rLib.badRequest(res, {msg: 'invalid JSON: "_subject" property not set'})
+  if (typeof permissions._subject != 'string')
+    return rLib.badRequest(res, {msg: 'invalid JSON: "_subject" must be string'})
+  if (permissions._inheritsPermissionsOf !== undefined && !Array.isArray(permissions._inheritsPermissionsOf))
+    if (typeof permissions._inheritsPermissionsOf == 'string')
+      permissions._inheritsPermissionsOf = [permissions._inheritsPermissionsOf]
+    else
+      return rLib.badRequest(res, {msg: '_inheritsPermissionsOf must be a string or array'})
+  var permissionsSelf = permissions._self
+  var user = lib.getUser(req.headers.authorization)
+  if (permissions._inheritsPermissionsOf === undefined) 
+    if (permissionsSelf === undefined || permissionsSelf.govern === undefined)
+      rLib.badRequest(res, `permissions for ${permissions._subject} must specify inheritance or at least one governor`)
+    else
+      if (permissionsSelf.admin === undefined)
+        permissionsSelf.admin = permissionsSelf.govern
+  verifyPrincipals(req, res, permissions, function() {
+    verifySharingSets(req, res, permissions, function () {
+      permissions._metadata = {}
+      var rslt = lib.setStandardCreationProperties(req, permissions._metadata, user)
+      if (rslt)
+        rLib.badRequest(res, rslt)
+      else {
+        calculateSharedWith(req, permissions)
+        addCalculatedProperties(req, permissions)
+        callback()
+      }
+    })
+  })
 }
 
 function calculateSharedWith(req, permissions) {
@@ -133,7 +150,7 @@ function getPermissions(req, res, subject) {
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'admin', function() {
       addCalculatedProperties(req, permissions)
-      rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
+      rLib.found(res, permissions, req.headers.accept, `/permsissions?${subject}`, etag)
       var hrend = process.hrtime(hrstart)
       log('getPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
@@ -146,7 +163,7 @@ function deletePermissions(req, res, subject) {
   pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
     db.deletePermissionsThen(req, res, subject, function(permissions, etag) {
       addCalculatedProperties(req, permissions)
-      rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
+      rLib.found(res, permissions, req.headers.accept, `/permsissions?${subject}`, etag)
       var hrend = process.hrtime(hrstart)
       log('deletePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
     })
@@ -195,7 +212,7 @@ function updatePermissions(req, res, subject, patch) {
               patchedPermissions._metadata.modifier = lib.getUser(req.headers.authorization)
               patchedPermissions._metadata.modified = new Date().toISOString()
               db.updatePermissionsThen(req, res, subject, patchedPermissions, scopes, etag, function(etag) {
-                rLib.found(res, patchedPermissions, req.headers.accept, `/permissins?${subject}`, etag)
+                rLib.found(res, patchedPermissions, req.headers.accept, `/permsissions?${subject}`, etag)
                 var hrend = process.hrtime(hrstart)
                 log('updatePermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
               })
@@ -217,12 +234,11 @@ function putPermissions(req, res, subject, permissions) {
     var new_ancestors = '_inheritsPermissionsOf' in permissions ? permissions._inheritsPermissionsOf : []
     ifAllowedToInheritFromThen(req, res, subject, new_ancestors, function(scopes) {
       verifyPermissions(req, res, permissions, function () {
-        calculateSharedWith(req, permissions)
         permissions._metadata.modifier = lib.getUser(req.headers.authorization)
         permissions._metadata.modified = new Date().toISOString()
         db.putPermissionsThen(req, res, subject, permissions, scopes, function(etag) {
           addCalculatedProperties(req, permissions) 
-          rLib.found(res, permissions, req.headers.accept, `/permissins?${subject}`, etag)
+          rLib.found(res, permissions, req.headers.accept, `/permsissions?${subject}`, etag)
           var hrend = process.hrtime(hrstart)
           log('putPermissions', `success, time: ${hrend[0]}s ${hrend[1]/1000000}ms`)
         })
