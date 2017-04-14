@@ -18,9 +18,8 @@ var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
 var ANYONE = 'http://apigee.com/users/anyone'
 var INCOGNITO = 'http://apigee.com/users/incognito'
 var SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET
-if (SHIPYARD_PRIVATE_SECRET !== undefined) {
+if (SHIPYARD_PRIVATE_SECRET !== undefined)
   SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64')
-}
 
 function log(method, text) {
   console.log(Date.now(), process.env.COMPONENT_NAME, method, text)
@@ -58,27 +57,102 @@ function verifySharingSets(req, res, permissions, callback) {
   }
 }
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const clientIDRegex = /[a-z][a-z\-]*/
+const emailRegex = /[a-zA-Z0-9._%'+\\-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/
+const issuerRegex =  /^https:\/\/(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/
+
+function convertEmailsToIDs(iss, emailArray, callback) {
+  callback(emailArray.map(email => ({email: email, id: 'dummy'})))
+}
+function convertIDsToEmails(iss, idArray, callback) {
+  callback(idArray.map(id => ({id: id, email: 'dummy'})))
+}
 function verifyPrincipals(req, res, principals, callback) {
-  callback()
+  var emails = {}
+  var ids = {}
+  for (let i = 0; i< principals.length; i++) {
+    let principal = principals[i]
+    if (!principal.startsWith('/teams/')) {
+      let parts = principal.split('#')
+      if (parts[0] != 'http://apigee.com/users')
+        if (parts.length == 2 && parts[0].match(issuerRegex)) {
+          let iss = parts[0]
+          let id = parts[1]
+          if (id.match(emailRegex))
+            if (iss in emails)
+              emails[iss].add(id)
+            else
+              emails[iss] = new Set([id])
+          else if (id.match(uuidRegex))
+            if (iss in ids)
+              ids[iss].add(id)
+            else
+              ids[iss] = new Set([id])
+          else if (!parts[0].match(clientIDRegex))
+            return rLib.badRequest(res, {msg: `users and clients must be of the form {issuer}#{id} where id is an email address or a UUID. Examples are https://login.apigee.com#6ff95057-7b80-4f57-bfec-c23ec5609c77 and https://login.apigee.com#mnally@apigee.com. Value is ${principal}`})              
+        } else
+          return rLib.badRequest(res, {msg: `users and clients must be of the form {issuer}#{id} where id is an email address or a UUID. Examples are https://login.apigee.com#6ff95057-7b80-4f57-bfec-c23ec5609c77 and https://login.apigee.com#mnally@apigee.com. Value is ${principal}`})      
+    }
+  }
+  var total = Object.keys(emails).length + Object.keys(ids).length
+  if (total == 0)
+    callback({})
+  else {
+    var count = 0
+    var principalMap = {}
+    for (let iss in emails) {
+      let emailArray = [...emails[iss]]
+      convertEmailsToIDs(iss, emailArray, function(issIds) {
+        if (emailArray.length == issIds.length)
+          for (let i = 0; i< issIds.length; i++)
+            principalMap[iss + '#' + issIds[i].email] = iss + '#' + issIds[i].id
+        else
+          return rLib.badRequest(res, {msg: 'invalid email IDs', ids: emailArray.filter(email => issIds.filter(entry => entry.email == email).length == 0)})
+        if (++count == total)
+          callback(principalMap) 
+      })
+    }
+    for (let iss in ids) {
+      let idsArray = [...ids[iss]]
+      convertIDsToEmails(iss, idsArray, function(issEmails) {
+        if (idsArray.length != issEmails.length)
+          return rLib.badRequest(res, {msg: 'invalid principal IDs', ids: idsArray.filter(id => issEmails.filter(entry => entry.id == id).length == 0)})
+        if (++count == total)
+          callback(principalMap)      
+      })
+    }
+  }
 }
 
 function verifyPropertyPrincipals(req, res, permissions, callback) {
+  function iteratePrincipals(callback) {
+    for (let propertyName in permissions)
+      if (!propertyName.startsWith('_') || propertyName == '_self') {
+        let propertyPermissions = permissions[propertyName]
+        if (typeof propertyPermissions == 'object')
+          for (let actionName in propertyPermissions) {
+            let principals = propertyPermissions[actionName]
+            if (Array.isArray(principals))
+              for (let i = 0; i<principals.length; i++)
+                callback(principals, i)
+          }
+      }    
+  }
   var allPrincipals = []
-  for (let propertyName in permissions)
-    if (!propertyName.startsWith('_') || propertyName == '_self') {
-      let propertyPermissions = permissions[propertyName]
-      if (typeof propertyPermissions == 'object')
-        for (let actionName in propertyPermissions) {
-          let principals = propertyPermissions[actionName]
-          if (Array.isArray(principals))
-            for (let i = 0; i<principals.length; i++)
-              allPrincipals.push(principals[i])
-        }
-    }
+  iteratePrincipals(function(principals, i) {
+    allPrincipals.push(principals[i])
+  })
   if (allPrincipals.length == 0)
     callback()
   else 
-    verifyPrincipals(req, res, allPrincipals, callback)
+    verifyPrincipals(req, res, allPrincipals, function(principalMap) {
+      iteratePrincipals(function (principals, i) {
+        if (principals[i] in principalMap)
+          principals[i] = principalMap[principals[i]]        
+      })
+      callback()
+    })
 }
 
 function verifyPermissions(req, res, permissions, callback) {
