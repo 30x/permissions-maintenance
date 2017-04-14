@@ -14,12 +14,16 @@ const pLib = require('permissions-helper-functions')
 const rLib = require('response-helper-functions')
 const db = require('./permissions-maintenance-db.js')
 
-var INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
-var ANYONE = 'http://apigee.com/users/anyone'
-var INCOGNITO = 'http://apigee.com/users/incognito'
-var SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET
-if (SHIPYARD_PRIVATE_SECRET !== undefined)
-  SHIPYARD_PRIVATE_SECRET = new Buffer(SHIPYARD_PRIVATE_SECRET).toString('base64')
+const INTERNAL_SCHEME = process.env.INTERNAL_SCHEME || 'http'
+const ANYONE = 'http://apigee.com/users/anyone'
+const INCOGNITO = 'http://apigee.com/users/incognito'
+const SHIPYARD_PRIVATE_SECRET = process.env.SHIPYARD_PRIVATE_SECRET === undefined ? undefined : new Buffer(process.env.SHIPYARD_PRIVATE_SECRET).toString('base64')
+const CLIENT_ID = process.env.PERMISSIONS_CLIENTID
+const CLIENT_SECRET = process.env.PERMISSIONS_CLIENTSECRET
+const clientTokens = {}
+
+if (CLIENT_ID == null || CLIENT_SECRET == null)
+  log('loading', 'misconfiguration — PERMISSIONS_CLIENTID and PERMISSIONS_CLIENTSECRET must be set')
 
 function log(method, text) {
   console.log(Date.now(), process.env.COMPONENT_NAME, method, text)
@@ -62,12 +66,30 @@ const clientIDRegex = /[a-z][a-z\-]*/
 const emailRegex = /[a-zA-Z0-9._%'+\\-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/
 const issuerRegex =  /^https:\/\/(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/
 
-function convertEmailsToIDs(iss, emailArray, callback) {
-  callback(emailArray.map(email => ({email: email, id: 'dummy'})))
+function convertUsers(errorHandler, iss, path, inputArray, callback) {
+  lib.withValidClientToken(errorHandler, clientTokens[iss], CLIENT_ID, CLIENT_SECRET, iss+ '/oauth/token', function(token) {
+    if (token)
+      clientTokens[iss] = token
+    else
+      token = clientTokens[iss]
+    var headers = {authorization: `Bearer ${token}`, 'content-type': 'application/json'}
+    lib.sendExternalRequestThen(errorHandler, 'POST', iss + path, headers, inputArray, function(clientRes) {
+      lib.getClientResponseBody(clientRes, function(body) {
+        if (clientRes.statusCode == 200) {
+          callback(JSON.parse(body))
+        } else 
+          rLib.internalError(errorHandler, `unable to convert User ids/emails. statusCode: ${clientRes.statusCode} body: ${body}`)
+      })
+    })
+  })
 }
-function convertIDsToEmails(iss, idArray, callback) {
-  callback(idArray.map(id => ({id: id, email: 'dummy'})))
+function convertIDsToEmails(errorHandler, iss, idArray, callback) {
+  convertUsers(errorHandler, iss, '/v2/ids/Users/ids/', idArray, callback)
 }
+function convertEmailsToIDs(errorHandler, iss, emailArray, callback) {
+  convertUsers(errorHandler, iss, '/v2/ids/Users/emails/', emailArray, callback)
+}
+
 function verifyPrincipals(req, res, principals, callback) {
   var emails = {}
   var ids = {}
@@ -103,7 +125,7 @@ function verifyPrincipals(req, res, principals, callback) {
     var principalMap = {}
     for (let iss in emails) {
       let emailArray = [...emails[iss]]
-      convertEmailsToIDs(iss, emailArray, function(issIds) {
+      convertEmailsToIDs(res, iss, emailArray, function(issIds) {
         if (emailArray.length == issIds.length)
           for (let i = 0; i< issIds.length; i++)
             principalMap[iss + '#' + issIds[i].email] = iss + '#' + issIds[i].id
@@ -115,7 +137,8 @@ function verifyPrincipals(req, res, principals, callback) {
     }
     for (let iss in ids) {
       let idsArray = [...ids[iss]]
-      convertIDsToEmails(iss, idsArray, function(issEmails) {
+      convertIDsToEmails(res, iss, idsArray, function(issEmails) {
+        console.log(iss, idsArray, issEmails)
         if (idsArray.length != issEmails.length)
           return rLib.badRequest(res, {msg: 'invalid principal IDs', ids: idsArray.filter(id => issEmails.filter(entry => entry.id == id).length == 0)})
         if (++count == total)
