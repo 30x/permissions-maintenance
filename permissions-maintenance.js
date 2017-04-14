@@ -320,7 +320,7 @@ function updatePermissions(req, res, subject, patch) {
   log('updatePermissions', `start subject: ${subject}`)
   db.withPermissionsDo(req, res, subject, function(permissions, etag) {
     pLib.ifAllowedThen(lib.flowThroughHeaders(req), res, subject, '_self', 'govern', function() {
-      lib.applyPatch(req, res, permissions, patch, function(patchedPermissions) {
+      lib.applyPatch(req.headers, res, permissions, patch, function(patchedPermissions) {
         if (req.headers['if-match'] == etag) { 
           var new_permissions = '_inheritsPermissionsOf' in patchedPermissions ? patchedPermissions._inheritsPermissionsOf : []
           ifAllowedToInheritFromThen(req, res, subject, new_permissions, function(scopes) {
