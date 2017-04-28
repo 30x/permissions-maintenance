@@ -613,14 +613,14 @@ function run(){
 }
 
 function start() {
-if (require.main === module) 
-  run()
-else
-  module.exports = {
-    requestHandler:requestHandler,
-    paths: ['/permissions', '/resources-accessible-by-team-members', '/resources-shared-with', '/permissions-heirs', '/permissions-heirs-details', '/users-who-can-access'],
-    init: init
-  }
+  if (require.main === module) 
+    run()
+  else
+    module.exports = {
+      requestHandler:requestHandler,
+      paths: ['/permissions', '/resources-accessible-by-team-members', '/resources-shared-with', '/permissions-heirs', '/permissions-heirs-details', '/users-who-can-access'],
+      init: init
+    }
 }
 
 if (process.env.INTERNAL_SY_ROUTER_HOST == 'kubernetes_host_ip') 
