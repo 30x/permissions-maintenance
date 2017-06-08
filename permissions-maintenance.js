@@ -95,7 +95,7 @@ function verifyPrincipals(req, res, principals, callback) {
   var ids = {}
   for (let i = 0; i< principals.length; i++) {
     let principal = principals[i]
-    if (!principal.startsWith('/teams/')) {
+    if (!principal.startsWith('/az-tm-')) {
       let parts = principal.split('#')
       if (parts[0] != 'http://apigee.com/users')
         if (parts.length == 2 && parts[0].match(issuerRegex)) {
@@ -231,7 +231,7 @@ function createPermissions(req, res, permissions) {
   log('createPermissions', `start subject: ${permissions._subject}`)
   function primCreate(req, res, permissions, scopes) {
     db.createPermissionsThen(req, res, permissions, scopes, function(etag) {
-      var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/permissions?${permissions._subject}`
+      var permissionsURL =  `${rLib.INTERNAL_URL_PREFIX}/az-permissions?${permissions._subject}`
       permissions.scopes = scopes
       rLib.created(res, permissions, req.headers.accept, permissionsURL, etag)
       var hrend = process.hrtime(hrstart)
@@ -294,7 +294,7 @@ function ifAllowedToInheritFromThen(req, res, subject, sharingSets, callback) {
     if (subject)
       queryParams.push(`subject=${subject}`)
     if (queryParams.length > 0) {
-      var path = `/is-allowed-to-inherit-from?${queryParams.join('&')}`
+      var path = `/az-is-allowed-to-inherit-from?${queryParams.join('&')}`
       lib.sendInternalRequestThen(res, 'GET', path, lib.flowThroughHeaders(req), null, function(clientResponse) {
         lib.getClientResponseBody(clientResponse, function(body) {
           if (clientResponse.statusCode == 200) { 
@@ -336,7 +336,7 @@ function updatePermissions(req, res, subject, patch) {
           })
         } else {
           var err = (req.headers['if-match'] === undefined) ? 'missing If-Match header' : 'If-Match header does not match etag ' + req.headers['If-Match'] + ' ' + etag
-          rLib.badRequest(res, err)
+          rLib.preconditionFailed(res, err)
         }
       })
     })
@@ -532,7 +532,7 @@ function getPermissionsHeirsDetails(req, res, queryString) {
 function withTeamsDo(req, res, user, callback) {
   if (user !== null) {
     user = lib.internalizeURL(user)
-    var teamsURL = `/teams?${user.replace('#', '%23')}`
+    var teamsURL = `/az-teams?${user.replace('#', '%23')}`
     lib.sendInternalRequestThen(res, 'GET', teamsURL, lib.flowThroughHeaders(req), undefined, function (clientResponse) {
       lib.getClientResponseBody(clientResponse, function(body) {
         if (clientResponse.statusCode == 200) { 
@@ -551,14 +551,14 @@ function withTeamsDo(req, res, user, callback) {
 }
 
 function requestHandler(req, res) {
-  if (req.url == '/permissions')
+  if (req.url == '/az-permissions')
     if (req.method == 'POST')
       lib.getServerPostObject(req, res, (p) => createPermissions(req, res, p))
     else
       rLib.methodNotAllowed(res, ['POST'])
   else {
     var req_url = url.parse(req.url)
-    if (req_url.pathname == '/permissions' && req_url.search !== null)
+    if (req_url.pathname == '/az-permissions' && req_url.search !== null)
       if (req.method == 'GET') 
         getPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else if (req.method == 'DELETE') 
@@ -569,27 +569,27 @@ function requestHandler(req, res) {
         lib.getServerPostObject(req, res, (body) => putPermissions(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host), body))
       else 
         rLib.methodNotAllowed(res, ['GET', 'PATCH', 'PUT'])
-    else if (req_url.pathname == '/resources-accessible-by-team-members' && req_url.search !== null)
+    else if (req_url.pathname == '/az-resources-accessible-by-team-members' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWithTeamTransitively(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         rLib.methodNotAllowed(res, ['GET'])
-    else if (req_url.pathname == '/resources-shared-with' && req_url.search !== null)
+    else if (req_url.pathname == '/az-resources-shared-with' && req_url.search !== null)
       if (req.method == 'GET')
         getResourcesSharedWith(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         rLib.methodNotAllowed(res, ['GET'])
-    else if (req_url.pathname == '/permissions-heirs' && req_url.search !== null)
+    else if (req_url.pathname == '/az-permissions-heirs' && req_url.search !== null)
       if (req.method == 'GET') 
         getPermissionsHeirs(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         rLib.methodNotAllowed(res, ['GET'])
-    else if (req_url.pathname == '/permissions-heirs-details' && req_url.search !== null) 
+    else if (req_url.pathname == '/az-permissions-heirs-details' && req_url.search !== null) 
       if (req.method == 'GET') 
         getPermissionsHeirsDetails(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
         rLib.methodNotAllowed(res, ['GET'])
-    else if (req_url.pathname == '/users-who-can-access' && req_url.search !== null)
+    else if (req_url.pathname == '/az-users-who-can-access' && req_url.search !== null)
       if (req.method == 'GET')
         getUsersWhoCanAccess(req, res, lib.internalizeURL(req_url.search.substring(1), req.headers.host))
       else
@@ -618,7 +618,7 @@ function start() {
   else
     module.exports = {
       requestHandler:requestHandler,
-      paths: ['/permissions', '/resources-accessible-by-team-members', '/resources-shared-with', '/permissions-heirs', '/permissions-heirs-details', '/users-who-can-access'],
+      paths: ['/az-permissions', '/az-resources-accessible-by-team-members', '/az-resources-shared-with', '/az-permissions-heirs', '/az-permissions-heirs-details', '/az-users-who-can-access'],
       init: init
     }
 }

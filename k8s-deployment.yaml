@@ -17,7 +17,7 @@ spec:
         routable: "true"
       annotations:
         privateHosts: sso.k8s.dev
-        privatePaths: 3000:/permissions 3000:/resources-shared-with 3000:/permissions-heirs 3000:/users-who-can-access
+        privatePaths: 3000:/az-permissions 3000:/az-resources-shared-with 3000:/az-permissions-heirs 3000:/az-users-who-can-access
     spec:
       containers:
       - name: permissions-maintenance
